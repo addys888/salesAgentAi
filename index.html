@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Sales Dialer Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --green: #25D366;
+    --green-dark: #128C7E;
+    --green-light: #DCF8C6;
+    --bg: #0a0f0a;
+    --surface: #111811;
+    --surface2: #182018;
+    --border: #25D36630;
+    --text: #e8f5e9;
+    --muted: #5a7a5a;
+    --accent: #00e676;
+    --danger: #ff5252;
+    --warn: #ffab40;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(37,211,102,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37,211,102,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 20px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 40px;
+    animation: slideDown 0.6s ease;
+  }
+
+  .logo {
+    width: 52px; height: 52px;
+    background: var(--green);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 0 30px rgba(37,211,102,0.4);
+    flex-shrink: 0;
+  }
+
+  .header-text h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .header-text p {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-pill {
+    margin-left: auto;
+    padding: 6px 14px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 6px;
+    transition: all 0.3s;
+  }
+
+  .status-pill.idle { background: rgba(90,122,90,0.2); color: var(--muted); border: 1px solid var(--muted); }
+  .status-pill.active { background: rgba(37,211,102,0.15); color: var(--green); border: 1px solid var(--green); }
+  .status-pill.calling { background: rgba(0,230,118,0.15); color: var(--accent); border: 1px solid var(--accent); animation: pulse-border 1.5s infinite; }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .dot.blink { animation: blink 1s infinite; }
+
+  /* Upload Zone */
+  #uploadZone {
+    border: 2px dashed var(--border);
+    border-radius: 20px;
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--surface);
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.7s ease;
+  }
+
+  #uploadZone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(37,211,102,0.05) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  #uploadZone:hover, #uploadZone.drag-over {
+    border-color: var(--green);
+    background: rgba(37,211,102,0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(37,211,102,0.1);
+  }
+
+  #uploadZone .upload-icon { font-size: 48px; margin-bottom: 16px; }
+  #uploadZone h2 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  #uploadZone p { font-size: 12px; color: var(--muted); }
+  #uploadZone .supported { margin-top: 16px; font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  #fileInput { display: none; }
+
+  .btn-upload {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 20px;
+    padding: 10px 24px;
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-upload:hover { background: var(--accent); transform: scale(1.03); }
+
+  /* Stats Bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    transition: all 0.3s;
+  }
+
+  .stat-card:hover { border-color: var(--green); transform: translateY(-1px); }
+  .stat-card .val { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; color: var(--accent); }
+  .stat-card .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  /* Dialer Panel */
+  .dialer-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    animation: fadeIn 0.6s ease;
+  }
+
+  .panel-header {
+    background: var(--surface2);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-header h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--green);
+    flex: 1;
+  }
+
+  /* Current Call Card */
+  .current-call {
+    padding: 28px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .avatar {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green-dark), var(--green));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .avatar.calling::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid var(--green);
+    animation: ring 1.5s infinite;
+  }
+
+  .call-info { flex: 1; }
+  .call-info .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .call-info .number { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: 2px; color: var(--text); margin: 4px 0; }
+  .call-info .name { font-size: 13px; color: var(--green); }
+  .call-info .position { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .call-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    letter-spacing: 0.3px;
+  }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-call { background: var(--green); color: #000; font-size: 13px; padding: 13px 24px; }
+  .btn-call:hover:not(:disabled) { background: var(--accent); box-shadow: 0 0 20px rgba(37,211,102,0.3); }
+  .btn-next { background: rgba(37,211,102,0.1); color: var(--green); border: 1px solid var(--border); }
+  .btn-next:hover:not(:disabled) { background: rgba(37,211,102,0.2); }
+  .btn-skip { background: rgba(255,82,82,0.08); color: var(--danger); border: 1px solid rgba(255,82,82,0.2); }
+  .btn-skip:hover:not(:disabled) { background: rgba(255,82,82,0.15); }
+
+  /* Queue Table */
+  .queue-section { padding: 0; }
+
+  .queue-table { width: 100%; border-collapse: collapse; }
+  .queue-table th {
+    background: var(--surface2);
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 400;
+  }
+
+  .queue-table td {
+    padding: 10px 16px;
+    font-size: 12px;
+    border-top: 1px solid rgba(37,211,102,0.06);
+    transition: all 0.2s;
+  }
+
+  .queue-table tr:hover td { background: rgba(37,211,102,0.03); }
+
+  .queue-table tr.current td { background: rgba(37,211,102,0.07); }
+  .queue-table tr.done td { opacity: 0.4; }
+  .queue-table tr.skipped td { opacity: 0.3; text-decoration: line-through; }
+
+  .row-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 99px;
+  }
+
+  .row-status.pending { background: rgba(90,122,90,0.2); color: var(--muted); }
+  .row-status.current { background: rgba(37,211,102,0.15); color: var(--green); }
+  .row-status.done { background: rgba(0,230,118,0.1); color: var(--accent); }
+  .row-status.skipped { background: rgba(255,82,82,0.1); color: var(--danger); }
+
+  .mono { font-family: 'DM Mono', monospace; letter-spacing: 1px; }
+
+  /* Progress bar */
+  .progress-wrap {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green-dark), var(--accent));
+    border-radius: 99px;
+    transition: width 0.5s ease;
+  }
+
+  .progress-text { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 32px;
+    color: var(--muted);
+    display: none;
+  }
+
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 13px; }
+
+  /* Done state */
+  .done-banner {
+    display: none;
+    background: linear-gradient(135deg, rgba(37,211,102,0.1), rgba(0,230,118,0.05));
+    border: 1px solid var(--green);
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+    margin-bottom: 24px;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .done-banner .icon { font-size: 48px; margin-bottom: 12px; }
+  .done-banner h2 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--accent); }
+  .done-banner p { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+  /* Animations */
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse-border { 0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.3); } 50% { box-shadow: 0 0 0 6px rgba(37,211,102,0); } }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes ring {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  .hidden { display: none !important; }
+
+  /* Column config */
+  .config-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: none;
+    animation: fadeIn 0.4s ease;
+  }
+
+  .config-bar h4 { font-family: 'Syne', sans-serif; font-size: 12px; color: var(--green); margin-bottom: 12px; }
+  .config-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .config-field { display: flex; flex-direction: column; gap: 4px; }
+  .config-field label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .config-field select, .config-field input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .config-field select:focus, .config-field input:focus { border-color: var(--green); }
+
+  .btn-confirm { background: var(--green); color: #000; padding: 8px 18px; }
+  .btn-confirm:hover { background: var(--accent); }
+
+  .note {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 20px;
+    line-height: 1.8;
+    padding: 0 20px;
+  }
+
+  .note a { color: var(--green); }
+
+  /* Scrollable queue */
+  .queue-scroll { max-height: 320px; overflow-y: auto; }
+  .queue-scroll::-webkit-scrollbar { width: 4px; }
+  .queue-scroll::-webkit-scrollbar-track { background: transparent; }
+  .queue-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 600px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .current-call { flex-direction: column; align-items: flex-start; }
+    .call-actions { flex-direction: row; }
+    .call-info .number { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">📲</div>
+    <div class="header-text">
+      <h1>WhatsApp Sales Dialer Agent</h1>
+      <p>Automated Excel → WhatsApp Call Queue · India</p>
+    </div>
+    <div class="status-pill idle" id="statusPill">
+      <span class="dot"></span>
+      <span id="statusText">Idle</span>
+    </div>
+  </div>
+
+  <!-- Upload Zone -->
+  <div id="uploadZone">
+    <div class="upload-icon">📊</div>
+    <h2>Drop your Excel file here</h2>
+    <p>Upload the spreadsheet with your customer mobile numbers</p>
+    <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+      📁 Choose File
+    </button>
+    <div class="supported">Supports .xlsx · .xls · .csv</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <!-- Column Config (shown after file load) -->
+  <div class="config-bar" id="configBar">
+    <h4>⚙️ Map your columns</h4>
+    <div class="config-fields">
+      <div class="config-field">
+        <label>📱 Phone Number Column</label>
+        <select id="colPhone"></select>
+      </div>
+      <div class="config-field">
+        <label>👤 Name Column (optional)</label>
+        <select id="colName"></select>
+      </div>
+      <div class="config-field">
+        <label>📝 Note Column (optional)</label>
+        <select id="colNote"></select>
+      </div>
+      <div class="config-field">
+        <label>&nbsp;</label>
+        <button class="btn btn-confirm" onclick="startQueue()">▶ Start Dialing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done Banner -->
+  <div class="done-banner" id="doneBanner">
+    <div class="icon">🎉</div>
+    <h2>All calls completed!</h2>
+    <p id="doneSummary">Your sales team has worked through the entire list.</p>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat-card"><div class="val" id="statTotal">0</div><div class="lbl">Total</div></div>
+    <div class="stat-card"><div class="val" id="statDone" style="color:var(--green)">0</div><div class="lbl">Called</div></div>
+    <div class="stat-card"><div class="val" id="statSkipped" style="color:var(--warn)">0</div><div class="lbl">Skipped</div></div>
+    <div class="stat-card"><div class="val" id="statLeft">0</div><div class="lbl">Remaining</div></div>
+  </div>
+
+  <!-- Dialer Panel -->
+  <div class="dialer-panel" id="dialerPanel" style="display:none">
+
+    <!-- Panel Header -->
+    <div class="panel-header">
+      <span>📞</span>
+      <h3>Current Contact</h3>
+      <button class="btn btn-skip" onclick="skipContact()" id="btnSkip">⏭ Skip</button>
+      <button class="btn" onclick="resetAll()" style="background:rgba(255,82,82,0.08);color:var(--danger);border:1px solid rgba(255,82,82,0.2);font-size:11px;padding:7px 14px;">✕ Reset</button>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-text" id="progressText">0 / 0</div>
+    </div>
+
+    <!-- Current Call -->
+    <div class="current-call" id="currentCall">
+      <div class="avatar" id="avatar">👤</div>
+      <div class="call-info">
+        <div class="label">Next to call</div>
+        <div class="number mono" id="currentNumber">—</div>
+        <div class="name" id="currentName"></div>
+        <div class="position" id="currentNote"></div>
+      </div>
+      <div class="call-actions">
+        <a class="btn btn-call" id="btnCall" href="#" target="_blank" onclick="markCalled()">
+          📲 Call on WhatsApp
+        </a>
+        <button class="btn btn-next" onclick="nextContact()" id="btnNext" disabled>
+          ✅ Done · Next →
+        </button>
+      </div>
+    </div>
+
+    <!-- Queue Table -->
+    <div class="queue-section">
+      <div class="queue-scroll">
+        <table class="queue-table" id="queueTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Mobile Number</th>
+              <th>Name</th>
+              <th>Note</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="queueBody"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState">
+          <div class="icon">📭</div>
+          <p>No contacts in queue</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="note">
+    ⚠️ <strong>How it works:</strong> Clicking "Call on WhatsApp" opens WhatsApp with the number pre-filled via <code>wa.me</code> link. 
+    Your sales rep just needs to tap the call button in WhatsApp. No API costs. Works on desktop & mobile.<br><br>
+    🔒 All data stays in your browser. Nothing is sent to any server.
+  </div>
+
+</div>
+
+<script>
+let contacts = [];
+let currentIndex = 0;
+let calledCount = 0;
+let skippedCount = 0;
+let hasCalledCurrent = false;
+
+// ── File Upload ──────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+uploadZone.addEventListener('click', e => {
+  if (e.target.tagName !== 'BUTTON') fileInput.click();
+});
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'csv') {
+    const reader = new FileReader();
+    reader.onload = e => parseCSV(e.target.result);
+    reader.readAsText(file);
+  } else if (['xlsx','xls'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      parseRows(data);
+    };
+    reader.readAsBinaryString(file);
+  } else {
+    alert('Please upload a .xlsx, .xls, or .csv file.');
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
+  parseRows(lines);
+}
+
+function parseRows(rows) {
+  if (rows.length < 2) { alert('File appears empty.'); return; }
+  const headers = rows[0].map(String);
+  window._rawRows = rows.slice(1);
+  window._headers = headers;
+
+  // Populate column selects
+  const makeOptions = (sel, withNone=false) => {
+    sel.innerHTML = '';
+    if (withNone) sel.innerHTML = '<option value="">— None —</option>';
+    headers.forEach((h, i) => {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = h || `Column ${i+1}`;
+      sel.appendChild(o);
+    });
+  };
+
+  makeOptions(document.getElementById('colPhone'));
+  makeOptions(document.getElementById('colName'), true);
+  makeOptions(document.getElementById('colNote'), true);
+
+  // Auto-detect phone column
+  const phoneIdx = headers.findIndex(h => /mobile|phone|number|contact|no\.?|ph\b/i.test(h));
+  if (phoneIdx >= 0) document.getElementById('colPhone').value = phoneIdx;
+
+  const nameIdx = headers.findIndex(h => /name/i.test(h));
+  if (nameIdx >= 0) document.getElementById('colName').value = nameIdx;
+
+  uploadZone.style.display = 'none';
+  document.getElementById('configBar').style.display = 'block';
+}
+
+// ── Clean & Validate Indian Numbers ──────────────────────────
+function cleanNumber(raw) {
+  let n = String(raw).replace(/\D/g, '');
+  // Remove country code
+  if (n.startsWith('91') && n.length === 12) n = n.slice(2);
+  if (n.startsWith('0') && n.length === 11) n = n.slice(1);
+  if (n.length === 10 && /^[6-9]/.test(n)) return n;
+  return null;
+}
+
+// ── Start Queue ───────────────────────────────────────────────
+function startQueue() {
+  const phoneCol = parseInt(document.getElementById('colPhone').value);
+  const nameCol = document.getElementById('colName').value !== '' ? parseInt(document.getElementById('colName').value) : null;
+  const noteCol = document.getElementById('colNote').value !== '' ? parseInt(document.getElementById('colNote').value) : null;
+
+  contacts = [];
+  window._rawRows.forEach((row, i) => {
+    const raw = row[phoneCol];
+    const num = cleanNumber(raw);
+    if (num) {
+      contacts.push({
+        raw: raw,
+        number: num,
+        name: nameCol !== null ? (row[nameCol] || '') : '',
+        note: noteCol !== null ? (row[noteCol] || '') : '',
+        status: 'pending'
+      });
+    }
+  });
+
+  if (contacts.length === 0) {
+    alert('No valid Indian mobile numbers found. Please check the column selection.');
+    return;
+  }
+
+  document.getElementById('configBar').style.display = 'none';
+  document.getElementById('statsBar').style.display = 'grid';
+  document.getElementById('dialerPanel').style.display = 'block';
+
+  currentIndex = 0;
+  calledCount = 0;
+  skippedCount = 0;
+
+  buildTable();
+  updateStats();
+  showContact(0);
+}
+
+// ── Table ─────────────────────────────────────────────────────
+function buildTable() {
+  const body = document.getElementById('queueBody');
+  body.innerHTML = '';
+  contacts.forEach((c, i) => {
+    const tr = document.createElement('tr');
+    tr.id = `row-${i}`;
+    tr.innerHTML = `
+      <td style="color:var(--muted)">${i+1}</td>
+      <td class="mono">+91 ${c.number}</td>
+      <td>${c.name || '<span style="color:var(--muted)">—</span>'}</td>
+      <td style="color:var(--muted);font-size:11px">${c.note || ''}</td>
+      <td><span class="row-status pending" id="status-${i}">● Pending</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function updateRowStatus(i, status) {
+  const row = document.getElementById(`row-${i}`);
+  const badge = document.getElementById(`status-${i}`);
+  if (!row || !badge) return;
+  row.className = status;
+  const labels = { current: '◉ Current', done: '✓ Called', skipped: '↷ Skipped', pending: '● Pending' };
+  badge.className = `row-status ${status}`;
+  badge.textContent = labels[status] || status;
+
+  if (status === 'current') {
+    setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+  }
+}
+
+// ── Show Contact ──────────────────────────────────────────────
+function showContact(i) {
+  hasCalledCurrent = false;
+  document.getElementById('btnNext').disabled = true;
+
+  if (i >= contacts.length) {
+    allDone();
+    return;
+  }
+
+  const c = contacts[i];
+  c.status = 'current';
+  updateRowStatus(i, 'current');
+
+  document.getElementById('currentNumber').textContent = `+91 ${c.number}`;
+  document.getElementById('currentName').textContent = c.name || 'Unknown Contact';
+  document.getElementById('currentNote').textContent = c.note || '';
+
+  // WhatsApp call URL — opens WhatsApp with the number
+  const waUrl = `https://wa.me/91${c.number}`;
+  document.getElementById('btnCall').href = waUrl;
+
+  // Avatar emoji
+  const emojis = ['👤','🧑','👩','👨','🙋','🤝','💼','🧑‍💼'];
+  document.getElementById('avatar').textContent = emojis[i % emojis.length];
+
+  // Status pill
+  setStatus('active', '● Ready');
+  updateProgress();
+  updateStats();
+}
+
+function markCalled() {
+  if (hasCalledCurrent) return;
+  hasCalledCurrent = true;
+  setStatus('calling', '📲 Calling...');
+  document.getElementById('avatar').classList.add('calling');
+  document.getElementById('btnNext').disabled = false;
+
+  setTimeout(() => {
+    document.getElementById('avatar').classList.remove('calling');
+  }, 4000);
+}
+
+function nextContact() {
+  if (!hasCalledCurrent) return;
+  contacts[currentIndex].status = 'done';
+  updateRowStatus(currentIndex, 'done');
+  calledCount++;
+  currentIndex++;
+  updateStats();
+  showContact(currentIndex);
+}
+
+function skipContact() {
+  contacts[currentIndex].status = 'skipped';
+  updateRowStatus(currentIndex, 'skipped');
+  skippedCount++;
+  currentIndex++;
+  updateStats();
+  showContact(currentIndex);
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = contacts.length;
+  document.getElementById('statDone').textContent = calledCount;
+  document.getElementById('statSkipped').textContent = skippedCount;
+  document.getElementById('statLeft').textContent = contacts.length - currentIndex;
+}
+
+function updateProgress() {
+  const pct = contacts.length ? (currentIndex / contacts.length * 100).toFixed(0) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${currentIndex} / ${contacts.length}`;
+}
+
+function setStatus(type, text) {
+  const pill = document.getElementById('statusPill');
+  pill.className = 'status-pill ' + type;
+  const dot = pill.querySelector('.dot');
+  dot.className = type === 'calling' ? 'dot blink' : 'dot';
+  document.getElementById('statusText').textContent = text;
+}
+
+function allDone() {
+  document.getElementById('dialerPanel').style.display = 'none';
+  document.getElementById('doneBanner').style.display = 'block';
+  document.getElementById('doneSummary').textContent =
+    `Called: ${calledCount} · Skipped: ${skippedCount} · Total: ${contacts.length}`;
+  setStatus('idle', '✓ Complete');
+  updateProgress();
+}
+
+function resetAll() {
+  if (!confirm('Reset everything and start over?')) return;
+  contacts = []; currentIndex = 0; calledCount = 0; skippedCount = 0;
+  document.getElementById('dialerPanel').style.display = 'none';
+  document.getElementById('statsBar').style.display = 'none';
+  document.getElementById('doneBanner').style.display = 'none';
+  document.getElementById('configBar').style.display = 'none';
+  document.getElementById('uploadZone').style.display = 'block';
+  fileInput.value = '';
+  setStatus('idle', 'Idle');
+}
+</script>
+</body>
+</html>
