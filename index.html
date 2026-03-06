@@ -262,6 +262,9 @@
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-call { background: var(--green); color: #000; font-size: 13px; padding: 13px 24px; }
   .btn-call:hover:not(:disabled) { background: var(--accent); box-shadow: 0 0 20px rgba(37,211,102,0.3); }
+  .btn-phone { background: rgba(33,150,243,0.15); color: #64b5f6; border: 1px solid rgba(33,150,243,0.3); font-size: 13px; padding: 13px 24px; }
+  .btn-phone:hover:not(:disabled) { background: rgba(33,150,243,0.28); box-shadow: 0 0 20px rgba(33,150,243,0.2); }
+  .call-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .btn-next { background: rgba(37,211,102,0.1); color: var(--green); border: 1px solid var(--border); }
   .btn-next:hover:not(:disabled) { background: rgba(37,211,102,0.2); }
   .btn-skip { background: rgba(255,82,82,0.08); color: var(--danger); border: 1px solid rgba(255,82,82,0.2); }
@@ -522,9 +525,14 @@
         <div class="position" id="currentNote"></div>
       </div>
       <div class="call-actions">
-        <a class="btn btn-call" id="btnCall" href="#" target="_blank" onclick="markCalled()">
-          📲 Call on WhatsApp
-        </a>
+        <div class="call-buttons">
+          <a class="btn btn-call" id="btnCall" href="#" target="_blank" onclick="markCalled()">
+            📲 WhatsApp Call
+          </a>
+          <a class="btn btn-phone" id="btnPhone" href="#" onclick="markCalled()">
+            📞 Phone Call
+          </a>
+        </div>
         <button class="btn btn-next" onclick="nextContact()" id="btnNext" disabled>
           ✅ Done · Next →
         </button>
@@ -749,6 +757,9 @@ function showContact(i) {
   // WhatsApp call URL — opens WhatsApp with the number
   const waUrl = `https://wa.me/91${c.number}`;
   document.getElementById('btnCall').href = waUrl;
+
+  // Phone dialer URL
+  document.getElementById('btnPhone').href = `tel:+91${c.number}`;
 
   // Avatar emoji
   const emojis = ['👤','🧑','👩','👨','🙋','🤝','💼','🧑‍💼'];
