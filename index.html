@@ -647,7 +647,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 
 <script>
 // ════════════════════════════════════════════════════════
-//  ⚠️  CONFIGURATION — REPLACE THESE WITH YOUR VALUES
+//  CONFIGURATION
 // ════════════════════════════════════════════════════════
 const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
@@ -657,209 +657,243 @@ const ADMIN_PASS    = 'Addys@270893';
 // ════════════════════════════════════════════════════════
 //  SUPABASE INIT
 // ════════════════════════════════════════════════════════
-let supabase;
-try {
-  // UMD build exposes supabasejs.createClient
-  const _sb = window.supabase || window.supabaseJs || window.Supabase;
-  supabase = (_sb && _sb.createClient)
-    ? _sb.createClient(SUPABASE_URL, SUPABASE_ANON)
-    : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') document.getElementById('configBanner').style.display = 'block';
-} catch(e) {
-  console.warn('Supabase init error:', e);
-  document.getElementById('configBanner').style.display = 'block';
+let _supabaseClient = null;
+function getSB() {
+  if (_supabaseClient) return _supabaseClient;
+  try {
+    const lib = (window.supabase && window.supabase.createClient) ? window.supabase
+              : (window.supabaseJs && window.supabaseJs.createClient) ? window.supabaseJs
+              : null;
+    if (lib) _supabaseClient = lib.createClient(SUPABASE_URL, SUPABASE_ANON);
+  } catch(e) { console.warn('Supabase init:', e); }
+  return _supabaseClient;
 }
 
 // ════════════════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════════════════
-let currentUser = null;
-let contacts = [], currentIndex = 0, calledCount = 0, skippedCount = 0;
-let hasCalledCurrent = false, currentOutcome = '';
-let isDark = true;
-let otpEmail = '', otpTimer = null, otpSeconds = 30;
+var currentUser = null;
+var contacts = [], currentIndex = 0, calledCount = 0, skippedCount = 0;
+var hasCalledCurrent = false, currentOutcome = '';
+var isDark = true;
+var otpEmail = '', otpTimerInterval = null, otpSeconds = 30;
 
 // ════════════════════════════════════════════════════════
-//  CHECK SESSION ON LOAD
+//  SESSION CHECK ON LOAD
 // ════════════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', async () => {
-  if (!supabase || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+window.addEventListener('DOMContentLoaded', async function() {
+  const sb = getSB();
+  if (!sb) { document.getElementById('configBanner').style.display='block'; return; }
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      currentUser = session.user;
+    const { data } = await sb.auth.getSession();
+    if (data.session && data.session.user) {
+      currentUser = data.session.user;
       enterApp();
     }
   } catch(e) {}
+
+  // Wire file upload events here too (safe after DOM ready)
+  var uz = document.getElementById('uploadZone');
+  var fi = document.getElementById('fileInput');
+  uz.addEventListener('dragover', function(e){ e.preventDefault(); uz.classList.add('drag-over'); });
+  uz.addEventListener('dragleave', function(){ uz.classList.remove('drag-over'); });
+  uz.addEventListener('drop', function(e){ e.preventDefault(); uz.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+  uz.addEventListener('click', function(e){ if(e.target.tagName !== 'BUTTON') fi.click(); });
+  fi.addEventListener('change', function(e){ handleFile(e.target.files[0]); });
+
+  // Modal backdrop close
+  ['tplModal','aiModal'].forEach(function(id){
+    document.getElementById(id).addEventListener('click', function(e){ if(e.target===e.currentTarget) e.target.classList.remove('open'); });
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){
+      document.getElementById('tplModal').classList.remove('open');
+      document.getElementById('aiModal').classList.remove('open');
+    }
+  });
 });
 
 // ════════════════════════════════════════════════════════
-//  NAVIGATION
+//  ALL GLOBAL FUNCTIONS — defined as window.fn so onclick always finds them
 // ════════════════════════════════════════════════════════
-function showUserAuth() {
+
+window.showUserAuth = function() {
   document.getElementById('landingScreen').style.display = 'none';
   document.getElementById('userAuthScreen').classList.add('visible');
-}
-function showAdminAuth() {
+};
+
+window.showAdminAuth = function() {
   document.getElementById('landingScreen').style.display = 'none';
   document.getElementById('adminAuthScreen').classList.add('visible');
-}
-function backToLanding() {
+};
+
+window.backToLanding = function() {
   document.getElementById('userAuthScreen').classList.remove('visible');
   document.getElementById('adminAuthScreen').classList.remove('visible');
   document.getElementById('landingScreen').style.display = 'flex';
   clearMsgs();
-}
+};
+
 function clearMsgs() {
-  ['loginMsg','registerMsg','otpMsg','adminMsg'].forEach(id => {
-    const el = document.getElementById(id); if(el) { el.textContent=''; el.className='auth-msg'; }
+  ['loginMsg','registerMsg','otpMsg','adminMsg'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el){ el.textContent=''; el.className='auth-msg'; }
   });
 }
-function showMsg(id, text, type='error') {
-  const el = document.getElementById(id);
-  if (!el) return;
+
+function showMsg(id, text, type) {
+  type = type || 'error';
+  var el = document.getElementById(id);
+  if(!el) return;
   el.textContent = text;
   el.className = 'auth-msg ' + type;
 }
-function setLoading(btnId, loading, text='') {
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
-  btn.disabled = loading;
-  if (text) btn.textContent = loading ? '⏳ ' + text : btn.getAttribute('data-orig') || text;
-}
 
-// ════════════════════════════════════════════════════════
-//  TABS
-// ════════════════════════════════════════════════════════
-function switchTab(tab) {
-  document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
-  document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
-  document.getElementById('tabLogin').className = 'auth-tab' + (tab === 'login' ? ' active' : '');
-  document.getElementById('tabRegister').className = 'auth-tab' + (tab === 'register' ? ' active' : '');
+window.switchTab = function(tab) {
+  document.getElementById('loginForm').style.display = tab==='login' ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = tab==='register' ? 'block' : 'none';
+  document.getElementById('tabLogin').className = 'auth-tab' + (tab==='login' ? ' active' : '');
+  document.getElementById('tabRegister').className = 'auth-tab' + (tab==='register' ? ' active' : '');
   clearMsgs();
-}
+};
 
-// ════════════════════════════════════════════════════════
-//  USER REGISTER
-// ════════════════════════════════════════════════════════
-async function userRegister() {
-  const name  = document.getElementById('regName').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const phone = document.getElementById('regPhone').value.trim();
-  const pass  = document.getElementById('regPassword').value;
-  if (!name)  return showMsg('registerMsg', '❌ Please enter your full name');
-  if (!email) return showMsg('registerMsg', '❌ Please enter your email');
-  if (!phone || !/^[6-9]\d{9}$/.test(phone)) return showMsg('registerMsg', '❌ Enter a valid 10-digit Indian mobile number');
-  if (pass.length < 8) return showMsg('registerMsg', '❌ Password must be at least 8 characters');
-  setLoading('registerBtn', true, 'Creating account...');
+window.togglePw = function(id, eye) {
+  var inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  eye.textContent = inp.type === 'password' ? '👁' : '🙈';
+};
+
+window.checkStrength = function(inp) {
+  var v = inp.value, score = 0;
+  if(v.length >= 8) score++;
+  if(/[A-Z]/.test(v)) score++;
+  if(/[0-9]/.test(v)) score++;
+  if(/[^A-Za-z0-9]/.test(v)) score++;
+  var colors = ['#ff5252','#ffab40','#ffeb3b','#00e676'];
+  var fill = document.getElementById('strengthFill');
+  fill.style.width = (score * 25) + '%';
+  fill.style.background = colors[score-1] || 'transparent';
+};
+
+// ── REGISTER ──
+window.userRegister = async function() {
+  var name  = document.getElementById('regName').value.trim();
+  var email = document.getElementById('regEmail').value.trim();
+  var phone = document.getElementById('regPhone').value.trim();
+  var pass  = document.getElementById('regPassword').value;
+  if(!name)  return showMsg('registerMsg','❌ Please enter your full name');
+  if(!email) return showMsg('registerMsg','❌ Please enter your email');
+  if(!phone || !/^[6-9]\d{9}$/.test(phone)) return showMsg('registerMsg','❌ Enter a valid 10-digit Indian mobile number');
+  if(pass.length < 8) return showMsg('registerMsg','❌ Password must be at least 8 characters');
+  var btn = document.getElementById('registerBtn');
+  btn.disabled = true; btn.textContent = '⏳ Creating...';
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email, password: pass,
-      options: {
-        data: { full_name: name, phone_number: phone, status: 'active' },
-        emailRedirectTo: window.location.href
-      }
+    var sb = getSB();
+    var res = await sb.auth.signUp({
+      email: email, password: pass,
+      options: { data: { full_name: name, phone_number: phone, status: 'active' }, emailRedirectTo: window.location.href }
     });
-    if (error) throw error;
-    showMsg('registerMsg', '✅ Account created! Check your email for a verification OTP.', 'success');
-    // Show OTP step
+    if(res.error) throw res.error;
     otpEmail = email;
     document.getElementById('userTabsWrap').style.display = 'none';
     document.getElementById('otpStep').style.display = 'block';
-    document.getElementById('otpDesc').textContent = `Enter the 6-digit OTP sent to ${email}`;
+    document.getElementById('otpDesc').textContent = 'Enter the 6-digit OTP sent to ' + email;
     startOTPTimer();
+    showMsg('registerMsg','✅ Check your email for the OTP.','success');
   } catch(e) {
-    showMsg('registerMsg', '❌ ' + (e.message || 'Registration failed'));
+    showMsg('registerMsg','❌ ' + (e.message || 'Registration failed'));
   }
-  setLoading('registerBtn', false, 'Create Account →');
-}
+  btn.disabled = false; btn.textContent = 'Create Account →';
+};
 
-// ════════════════════════════════════════════════════════
-//  USER LOGIN
-// ════════════════════════════════════════════════════════
-async function userLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass  = document.getElementById('loginPassword').value;
-  if (!email || !pass) return showMsg('loginMsg', '❌ Please enter email and password');
-  setLoading('loginBtn', true, 'Logging in...');
+// ── LOGIN ──
+window.userLogin = async function() {
+  var email = document.getElementById('loginEmail').value.trim();
+  var pass  = document.getElementById('loginPassword').value;
+  if(!email || !pass) return showMsg('loginMsg','❌ Please enter email and password');
+  var btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = '⏳ Logging in...';
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
-    // Trigger OTP via magic link / email OTP
-    const { error: otpErr } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-    if (otpErr) throw otpErr;
-    currentUser = data.user;
+    var sb = getSB();
+    var res = await sb.auth.signInWithPassword({ email: email, password: pass });
+    if(res.error) throw res.error;
+    currentUser = res.data.user;
+    // Send OTP for 2FA
+    var otpRes = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false } });
+    if(otpRes.error) throw otpRes.error;
     otpEmail = email;
     document.getElementById('userTabsWrap').style.display = 'none';
     document.getElementById('otpStep').style.display = 'block';
-    document.getElementById('otpDesc').textContent = `OTP sent to ${email} — enter it to verify login`;
+    document.getElementById('otpDesc').textContent = 'OTP sent to ' + email + ' — enter it to verify login';
     startOTPTimer();
-    showMsg('loginMsg', '📬 OTP sent to your email', 'success');
   } catch(e) {
-    showMsg('loginMsg', '❌ ' + (e.message === 'Invalid login credentials' ? 'Wrong email or password' : e.message));
+    var msg = e.message === 'Invalid login credentials' ? 'Wrong email or password' : e.message;
+    showMsg('loginMsg','❌ ' + msg);
   }
-  setLoading('loginBtn', false, 'Login →');
-}
+  btn.disabled = false; btn.textContent = 'Login →';
+};
 
-// ════════════════════════════════════════════════════════
-//  OTP VERIFY
-// ════════════════════════════════════════════════════════
+// ── OTP ──
 function getOTPValue() {
-  return [0,1,2,3,4,5].map(i => document.getElementById('otp'+i).value).join('');
+  return [0,1,2,3,4,5].map(function(i){ return document.getElementById('otp'+i).value; }).join('');
 }
-async function verifyOTP() {
-  const token = getOTPValue();
-  if (token.length !== 6) return showMsg('otpMsg', '❌ Enter all 6 digits');
-  setLoading('verifyBtn', true, 'Verifying...');
+
+window.verifyOTP = async function() {
+  var token = getOTPValue();
+  if(token.length !== 6) return showMsg('otpMsg','❌ Enter all 6 digits');
+  var btn = document.getElementById('verifyBtn');
+  btn.disabled = true; btn.textContent = '⏳ Verifying...';
   try {
-    const { data, error } = await supabase.auth.verifyOtp({ email: otpEmail, token, type: 'email' });
-    if (error) throw error;
-    currentUser = data.user;
+    var sb = getSB();
+    var res = await sb.auth.verifyOtp({ email: otpEmail, token: token, type: 'email' });
+    if(res.error) throw res.error;
+    currentUser = res.data.user;
     clearOTPTimer();
     enterApp();
   } catch(e) {
-    showMsg('otpMsg', '❌ Invalid or expired OTP. Please try again.');
+    showMsg('otpMsg','❌ Invalid or expired OTP. Please try again.');
   }
-  setLoading('verifyBtn', false, 'Verify & Login →');
-}
-async function resendOTP() {
+  btn.disabled = false; btn.textContent = 'Verify & Login →';
+};
+
+window.resendOTP = async function() {
   document.getElementById('resendBtn').disabled = true;
   try {
-    await supabase.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: false } });
-    showMsg('otpMsg', '📬 New OTP sent!', 'success');
+    var sb = getSB();
+    await sb.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: false } });
+    showMsg('otpMsg','📬 New OTP sent!','success');
     startOTPTimer();
-  } catch(e) { showMsg('otpMsg', '❌ Failed to resend. Try again.'); }
-}
+  } catch(e) { showMsg('otpMsg','❌ Failed to resend. Try again.'); }
+};
+
 function startOTPTimer() {
   clearOTPTimer();
   otpSeconds = 30;
   document.getElementById('resendBtn').disabled = true;
-  document.getElementById('otpTimer').textContent = `Resend in ${otpSeconds}s`;
-  otpTimer = setInterval(() => {
+  document.getElementById('otpTimer').textContent = 'Resend in 30s';
+  otpTimerInterval = setInterval(function(){
     otpSeconds--;
-    if (otpSeconds <= 0) {
+    if(otpSeconds <= 0){
       clearOTPTimer();
       document.getElementById('resendBtn').disabled = false;
       document.getElementById('otpTimer').textContent = '';
     } else {
-      document.getElementById('otpTimer').textContent = `Resend in ${otpSeconds}s`;
+      document.getElementById('otpTimer').textContent = 'Resend in ' + otpSeconds + 's';
     }
   }, 1000);
 }
-function clearOTPTimer() { if (otpTimer) { clearInterval(otpTimer); otpTimer = null; } }
+function clearOTPTimer() { if(otpTimerInterval){ clearInterval(otpTimerInterval); otpTimerInterval=null; } }
 
-function otpMove(el, idx) {
-  el.value = el.value.replace(/\D/g, '').slice(-1);
-  if (el.value && idx < 5) document.getElementById('otp' + (idx+1)).focus();
-  if (getOTPValue().length === 6) verifyOTP();
-}
+window.otpMove = function(el, idx) {
+  el.value = el.value.replace(/\D/g,'').slice(-1);
+  if(el.value && idx < 5) document.getElementById('otp'+(idx+1)).focus();
+  if(getOTPValue().length === 6) window.verifyOTP();
+};
 
-// ════════════════════════════════════════════════════════
-//  ENTER APP
-// ════════════════════════════════════════════════════════
+// ── ENTER APP ──
 function enterApp() {
-  const meta = currentUser?.user_metadata || {};
-  const name = meta.full_name || currentUser?.email?.split('@')[0] || 'User';
+  var meta = (currentUser && currentUser.user_metadata) || {};
+  var name = meta.full_name || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || 'User';
   document.getElementById('userChipName').textContent = name.split(' ')[0];
   document.getElementById('userAvatarSm').textContent = name[0].toUpperCase();
   document.getElementById('userAuthScreen').classList.remove('visible');
@@ -867,314 +901,333 @@ function enterApp() {
   document.getElementById('appContainer').style.display = 'block';
 }
 
-// ════════════════════════════════════════════════════════
-//  ADMIN LOGIN
-// ════════════════════════════════════════════════════════
-function adminLogin() {
-  const u = document.getElementById('adminUser').value.trim();
-  const p = document.getElementById('adminPass').value;
-  if (u === ADMIN_USER && p === ADMIN_PASS) {
+// ── ADMIN LOGIN ──
+window.adminLogin = function() {
+  var u = document.getElementById('adminUser').value.trim();
+  var p = document.getElementById('adminPass').value;
+  if(u === ADMIN_USER && p === ADMIN_PASS) {
     document.getElementById('adminAuthScreen').classList.remove('visible');
     document.getElementById('adminPanel').style.display = 'block';
-    loadUsers();
+    window.loadUsers();
   } else {
-    showMsg('adminMsg', '❌ Invalid admin credentials');
+    showMsg('adminMsg','❌ Invalid admin credentials');
     document.getElementById('adminPass').value = '';
   }
-}
-function adminLogout() {
+};
+
+window.adminLogout = function() {
   document.getElementById('adminPanel').style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex';
-}
+};
 
-// ════════════════════════════════════════════════════════
-//  LOAD USERS (Admin)
-// ════════════════════════════════════════════════════════
-async function loadUsers() {
+// ── LOAD USERS ──
+window.loadUsers = async function() {
   document.getElementById('usersLoading').style.display = 'flex';
   document.getElementById('usersEmpty').style.display = 'none';
   document.getElementById('usersTable').style.display = 'none';
   try {
-    // Using auth admin — requires service role key for full list
-    // With anon key we query our profiles table instead
-    const { data, error } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    if (!data || data.length === 0) {
+    var sb = getSB();
+    var res = await sb.from('user_profiles').select('*').order('created_at', { ascending: false });
+    if(res.error) throw res.error;
+    var data = res.data;
+    if(!data || data.length === 0){
       document.getElementById('usersLoading').style.display = 'none';
       document.getElementById('usersEmpty').style.display = 'block';
-      updateAdminStats(0,0,0,0);
-      return;
+      updateAdminStats(0,0,0,0); return;
     }
-    const active = data.filter(u => u.status === 'active').length;
-    const suspended = data.filter(u => u.status === 'suspended').length;
-    const pending = data.filter(u => u.status === 'pending').length;
+    var active    = data.filter(function(u){ return u.status==='active'; }).length;
+    var suspended = data.filter(function(u){ return u.status==='suspended'; }).length;
+    var pending   = data.filter(function(u){ return u.status==='pending'; }).length;
     updateAdminStats(data.length, active, suspended, pending);
-    const body = document.getElementById('usersBody');
+    var body = document.getElementById('usersBody');
     body.innerHTML = '';
-    data.forEach((u, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="color:var(--muted)">${i+1}</td>
-        <td style="font-weight:600">${u.full_name || '—'}</td>
-        <td style="color:var(--muted)">${u.email || '—'}</td>
-        <td class="mono">${u.phone_number || '—'}</td>
-        <td style="color:var(--muted);font-size:11px">${u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '—'}</td>
-        <td><span class="user-badge ${u.status||'active'}">${(u.status||'active').toUpperCase()}</span></td>
-        <td>
-          <button class="action-btn reset" onclick="adminResetPw('${u.email}')">✉️ Reset PW</button>
-          ${u.status !== 'suspended'
-            ? `<button class="action-btn suspend" onclick="adminToggleStatus('${u.id}','suspended')">🚫 Suspend</button>`
-            : `<button class="action-btn activate" onclick="adminToggleStatus('${u.id}','active')">✅ Activate</button>`}
-        </td>`;
+    data.forEach(function(u, i){
+      var tr = document.createElement('tr');
+      var suspendBtn = u.status !== 'suspended'
+        ? '<button class="action-btn suspend" onclick="adminToggleStatus(\''+u.id+'\',\'suspended\')">🚫 Suspend</button>'
+        : '<button class="action-btn activate" onclick="adminToggleStatus(\''+u.id+'\',\'active\')">✅ Activate</button>';
+      tr.innerHTML =
+        '<td style="color:var(--muted)">'+(i+1)+'</td>'+
+        '<td style="font-weight:600">'+(u.full_name||'—')+'</td>'+
+        '<td style="color:var(--muted)">'+(u.email||'—')+'</td>'+
+        '<td class="mono">'+(u.phone_number||'—')+'</td>'+
+        '<td style="color:var(--muted);font-size:11px">'+(u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '—')+'</td>'+
+        '<td><span class="user-badge '+(u.status||'active')+'">'+(u.status||'active').toUpperCase()+'</span></td>'+
+        '<td><button class="action-btn reset" onclick="adminResetPw(\''+u.email+'\')">✉️ Reset PW</button>'+suspendBtn+'</td>';
       body.appendChild(tr);
     });
     document.getElementById('usersLoading').style.display = 'none';
     document.getElementById('usersTable').style.display = 'table';
   } catch(e) {
-    document.getElementById('usersLoading').innerHTML = `⚠️ Could not load users. Make sure your Supabase credentials are configured and the <strong>user_profiles</strong> table exists. <br><small style="color:var(--danger)">${e.message}</small>`;
+    document.getElementById('usersLoading').innerHTML =
+      '⚠️ Could not load users. Make sure the <strong>user_profiles</strong> table exists in Supabase.<br><small style="color:var(--danger)">'+e.message+'</small>';
   }
-}
+};
+
 function updateAdminStats(total, active, suspended, pending) {
   document.getElementById('aStatTotal').textContent = total;
   document.getElementById('aStatActive').textContent = active;
   document.getElementById('aStatSuspended').textContent = suspended;
   document.getElementById('aStatPending').textContent = pending;
 }
-async function adminResetPw(email) {
-  if (!email || !confirm(`Send password reset email to ${email}?`)) return;
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
-    if (error) throw error;
-    alert(`✅ Password reset email sent to ${email}`);
-  } catch(e) { alert('❌ Failed: ' + e.message); }
-}
-async function adminToggleStatus(userId, newStatus) {
-  try {
-    const { error } = await supabase.from('user_profiles').update({ status: newStatus }).eq('id', userId);
-    if (error) throw error;
-    loadUsers();
-  } catch(e) { alert('❌ Failed: ' + e.message); }
-}
 
-// ════════════════════════════════════════════════════════
-//  APP LOGOUT
-// ════════════════════════════════════════════════════════
-async function appLogout() {
-  if (!confirm('Logout and return to home?')) return;
-  try { await supabase.auth.signOut(); } catch(e) {}
+window.adminResetPw = async function(email) {
+  if(!email || !confirm('Send password reset email to '+email+'?')) return;
+  try {
+    var sb = getSB();
+    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if(res.error) throw res.error;
+    alert('✅ Password reset email sent to '+email);
+  } catch(e) { alert('❌ Failed: '+e.message); }
+};
+
+window.adminToggleStatus = async function(userId, newStatus) {
+  try {
+    var sb = getSB();
+    var res = await sb.from('user_profiles').update({ status: newStatus }).eq('id', userId);
+    if(res.error) throw res.error;
+    window.loadUsers();
+  } catch(e) { alert('❌ Failed: '+e.message); }
+};
+
+window.appLogout = async function() {
+  if(!confirm('Logout and return to home?')) return;
+  try { var sb=getSB(); if(sb) await sb.auth.signOut(); } catch(e) {}
   currentUser = null;
-  resetDialer();
+  window.resetDialer();
   document.getElementById('appContainer').style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex';
-}
+};
 
-// ════════════════════════════════════════════════════════
-//  THEME
-// ════════════════════════════════════════════════════════
-function toggleTheme() {
+window.toggleTheme = function() {
   isDark = !isDark;
-  const t = isDark ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', t);
-  ['themeBtn','adminThemeBtn'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent = isDark?'🌙':'☀️'; });
-}
-
-// ════════════════════════════════════════════════════════
-//  PASSWORD UTILS
-// ════════════════════════════════════════════════════════
-function togglePw(id, eye) {
-  const inp = document.getElementById(id);
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-  eye.textContent = inp.type === 'password' ? '👁' : '🙈';
-}
-function checkStrength(inp) {
-  const v = inp.value;
-  let score = 0;
-  if (v.length >= 8) score++;
-  if (/[A-Z]/.test(v)) score++;
-  if (/[0-9]/.test(v)) score++;
-  if (/[^A-Za-z0-9]/.test(v)) score++;
-  const colors = ['#ff5252','#ffab40','#ffeb3b','#00e676'];
-  const fill = document.getElementById('strengthFill');
-  fill.style.width = (score * 25) + '%';
-  fill.style.background = colors[score - 1] || 'transparent';
-}
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  ['themeBtn','adminThemeBtn'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.textContent = isDark ? '🌙' : '☀️';
+  });
+};
 
 // ════════════════════════════════════════════════════════
 //  FILE UPLOAD
 // ════════════════════════════════════════════════════════
-const uploadZone = document.getElementById('uploadZone');
-const fileInput  = document.getElementById('fileInput');
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
-uploadZone.addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') fileInput.click(); });
-fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
-
 function handleFile(file) {
-  if (!file) return;
-  const ext = file.name.split('.').pop().toLowerCase();
-  if (ext === 'csv') { const r=new FileReader(); r.onload=e=>parseCSV(e.target.result); r.readAsText(file); }
-  else if (['xlsx','xls'].includes(ext)) { const r=new FileReader(); r.onload=e=>{const wb=XLSX.read(e.target.result,{type:'binary'});parseRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1}));}; r.readAsBinaryString(file); }
-  else alert('Please upload .xlsx, .xls, or .csv');
+  if(!file) return;
+  var ext = file.name.split('.').pop().toLowerCase();
+  if(ext === 'csv'){
+    var r = new FileReader(); r.onload = function(e){ parseCSV(e.target.result); }; r.readAsText(file);
+  } else if(['xlsx','xls'].includes(ext)){
+    var r2 = new FileReader();
+    r2.onload = function(e){
+      var wb = XLSX.read(e.target.result, {type:'binary'});
+      parseRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}));
+    };
+    r2.readAsBinaryString(file);
+  } else { alert('Please upload .xlsx, .xls, or .csv'); }
 }
-function parseCSV(t) { parseRows(t.trim().split('\n').map(l=>l.split(',').map(c=>c.trim().replace(/^"|"$/g,'')))); }
+function parseCSV(t) { parseRows(t.trim().split('\n').map(function(l){ return l.split(',').map(function(c){ return c.trim().replace(/^"|"$/g,''); }); })); }
 function parseRows(rows) {
-  if (rows.length < 2) { alert('File appears empty.'); return; }
-  const headers = rows[0].map(String);
+  if(rows.length < 2){ alert('File appears empty.'); return; }
+  var headers = rows[0].map(String);
   window._rawRows = rows.slice(1);
-  const mk = (sel, none=false) => { sel.innerHTML=none?'<option value="">— None —</option>':''; headers.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h||`Col ${i+1}`;sel.appendChild(o)}); };
-  mk(document.getElementById('colPhone')); mk(document.getElementById('colName'),true); mk(document.getElementById('colNote'),true);
-  const pi=headers.findIndex(h=>/mobile|phone|number|contact|no\.?|ph\b/i.test(h)); if(pi>=0) document.getElementById('colPhone').value=pi;
-  const ni=headers.findIndex(h=>/name/i.test(h)); if(ni>=0) document.getElementById('colName').value=ni;
-  uploadZone.style.display='none'; document.getElementById('configBar').style.display='block';
+  function mk(sel, none){
+    sel.innerHTML = none ? '<option value="">— None —</option>' : '';
+    headers.forEach(function(h,i){ var o=document.createElement('option'); o.value=i; o.textContent=h||'Col '+(i+1); sel.appendChild(o); });
+  }
+  mk(document.getElementById('colPhone'), false);
+  mk(document.getElementById('colName'), true);
+  mk(document.getElementById('colNote'), true);
+  var pi = headers.findIndex(function(h){ return /mobile|phone|number|contact|no\.?|ph\b/i.test(h); });
+  if(pi >= 0) document.getElementById('colPhone').value = pi;
+  var ni = headers.findIndex(function(h){ return /name/i.test(h); });
+  if(ni >= 0) document.getElementById('colName').value = ni;
+  document.getElementById('uploadZone').style.display = 'none';
+  document.getElementById('configBar').style.display = 'block';
 }
 function cleanNumber(raw) {
-  let n=String(raw).replace(/\D/g,'');
-  if(n.startsWith('91')&&n.length===12)n=n.slice(2);
-  if(n.startsWith('0')&&n.length===11)n=n.slice(1);
-  if(n.length===10&&/^[6-9]/.test(n))return n;
+  var n = String(raw).replace(/\D/g,'');
+  if(n.startsWith('91') && n.length===12) n = n.slice(2);
+  if(n.startsWith('0') && n.length===11) n = n.slice(1);
+  if(n.length===10 && /^[6-9]/.test(n)) return n;
   return null;
 }
 
 // ════════════════════════════════════════════════════════
 //  DIALER
 // ════════════════════════════════════════════════════════
-function startQueue() {
-  const pc=parseInt(document.getElementById('colPhone').value);
-  const nc=document.getElementById('colName').value!==''?parseInt(document.getElementById('colName').value):null;
-  const oc=document.getElementById('colNote').value!==''?parseInt(document.getElementById('colNote').value):null;
-  contacts=[];
-  window._rawRows.forEach(row=>{const num=cleanNumber(row[pc]);if(num)contacts.push({number:num,name:nc!=null?(row[nc]||''):'',note:oc!=null?(row[oc]||''):'',status:'pending',outcome:''})});
-  if(!contacts.length){alert('No valid Indian mobile numbers found.');return;}
-  document.getElementById('configBar').style.display='none';
-  document.getElementById('statsBar').style.display='grid';
-  document.getElementById('dialerPanel').style.display='block';
-  currentIndex=0;calledCount=0;skippedCount=0;
-  buildTable();updateStats();showContact(0);
-}
+window.startQueue = function() {
+  var pc = parseInt(document.getElementById('colPhone').value);
+  var ncVal = document.getElementById('colName').value;
+  var ocVal = document.getElementById('colNote').value;
+  var nc = ncVal !== '' ? parseInt(ncVal) : null;
+  var oc = ocVal !== '' ? parseInt(ocVal) : null;
+  contacts = [];
+  window._rawRows.forEach(function(row){
+    var num = cleanNumber(row[pc]);
+    if(num) contacts.push({ number:num, name: nc!=null?(row[nc]||''):'', note: oc!=null?(row[oc]||''):'', status:'pending', outcome:'' });
+  });
+  if(!contacts.length){ alert('No valid Indian mobile numbers found.'); return; }
+  document.getElementById('configBar').style.display = 'none';
+  document.getElementById('statsBar').style.display = 'grid';
+  document.getElementById('dialerPanel').style.display = 'block';
+  currentIndex=0; calledCount=0; skippedCount=0;
+  buildTable(); updateStats(); showContact(0);
+};
+
 function buildTable() {
-  const body=document.getElementById('queueBody');body.innerHTML='';
-  contacts.forEach((c,i)=>{const tr=document.createElement('tr');tr.id=`row-${i}`;tr.innerHTML=`<td style="color:var(--muted)">${i+1}</td><td class="mono">+91 ${c.number}</td><td>${c.name||'<span style="color:var(--muted)">—</span>'}</td><td id="oc-cell-${i}" style="color:var(--muted);font-size:11px">—</td><td><span class="row-status pending" id="status-${i}">● Pending</span></td>`;body.appendChild(tr);});
+  var body = document.getElementById('queueBody'); body.innerHTML = '';
+  contacts.forEach(function(c,i){
+    var tr = document.createElement('tr'); tr.id = 'row-'+i;
+    tr.innerHTML = '<td style="color:var(--muted)">'+(i+1)+'</td>'+
+      '<td class="mono">+91 '+c.number+'</td>'+
+      '<td>'+(c.name||'<span style="color:var(--muted)">—</span>')+'</td>'+
+      '<td id="oc-cell-'+i+'" style="color:var(--muted);font-size:11px">—</td>'+
+      '<td><span class="row-status pending" id="status-'+i+'">● Pending</span></td>';
+    body.appendChild(tr);
+  });
 }
-function updateRowStatus(i,s){
-  const row=document.getElementById(`row-${i}`);const badge=document.getElementById(`status-${i}`);if(!row||!badge)return;
-  row.className=s;const L={current:'◉ Current',done:'✓ Called',skipped:'↷ Skipped',pending:'● Pending'};
-  badge.className=`row-status ${s}`;badge.textContent=L[s]||s;
-  if(s==='current')setTimeout(()=>row.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+function updateRowStatus(i, s) {
+  var row = document.getElementById('row-'+i);
+  var badge = document.getElementById('status-'+i);
+  if(!row||!badge) return;
+  row.className = s;
+  var L = {current:'◉ Current', done:'✓ Called', skipped:'↷ Skipped', pending:'● Pending'};
+  badge.className = 'row-status '+s;
+  badge.textContent = L[s]||s;
+  if(s==='current') setTimeout(function(){ row.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 100);
 }
-function showContact(i){
-  hasCalledCurrent=false;currentOutcome='';document.getElementById('btnNext').disabled=true;
-  ['interested','callback','noanswer','notinterested'].forEach(o=>document.getElementById(`oc-${o}`).className='outcome-btn');
-  if(i>=contacts.length){allDone();return;}
-  const c=contacts[i];c.status='current';updateRowStatus(i,'current');
-  document.getElementById('currentNumber').textContent=`+91 ${c.number}`;
-  document.getElementById('currentName').textContent=c.name||'Unknown Contact';
-  document.getElementById('currentNote').textContent=c.note||'';
-  document.getElementById('btnCall').href=`https://wa.me/91${c.number}`;
-  document.getElementById('btnPhone').href=`tel:+91${c.number}`;
-  document.getElementById('avEl').textContent=['👤','🧑','👩','👨','🙋','🤝','💼','🧑‍💼'][i%8];
-  setStatus('active','● Ready');updateProgress();updateStats();
+function showContact(i) {
+  hasCalledCurrent = false; currentOutcome = '';
+  document.getElementById('btnNext').disabled = true;
+  ['interested','callback','noanswer','notinterested'].forEach(function(o){ document.getElementById('oc-'+o).className='outcome-btn'; });
+  if(i >= contacts.length){ allDone(); return; }
+  var c = contacts[i]; c.status = 'current'; updateRowStatus(i,'current');
+  document.getElementById('currentNumber').textContent = '+91 '+c.number;
+  document.getElementById('currentName').textContent = c.name||'Unknown Contact';
+  document.getElementById('currentNote').textContent = c.note||'';
+  document.getElementById('btnCall').href = 'https://wa.me/91'+c.number;
+  document.getElementById('btnPhone').href = 'tel:+91'+c.number;
+  var emojis = ['👤','🧑','👩','👨','🙋','🤝','💼','🧑‍💼'];
+  document.getElementById('avEl').textContent = emojis[i%8];
+  setStatus('active','● Ready'); updateProgress(); updateStats();
 }
-function markCalled(){
-  if(hasCalledCurrent)return;hasCalledCurrent=true;
-  setStatus('calling','📲 Calling...');document.getElementById('avEl').classList.add('calling');
-  document.getElementById('btnNext').disabled=false;
-  setTimeout(()=>document.getElementById('avEl').classList.remove('calling'),4000);
-}
-function setOutcome(o){
-  currentOutcome=o;
-  ['interested','callback','noanswer','notinterested'].forEach(x=>document.getElementById(`oc-${x}`).className='outcome-btn'+(x===o?` sel-${x}`:''));
-}
-function nextContact(){
-  if(!hasCalledCurrent)return;
-  contacts[currentIndex].status='done';contacts[currentIndex].outcome=currentOutcome;
+window.markCalled = function() {
+  if(hasCalledCurrent) return;
+  hasCalledCurrent = true;
+  setStatus('calling','📲 Calling...');
+  document.getElementById('avEl').classList.add('calling');
+  document.getElementById('btnNext').disabled = false;
+  setTimeout(function(){ document.getElementById('avEl').classList.remove('calling'); }, 4000);
+};
+window.setOutcome = function(o) {
+  currentOutcome = o;
+  ['interested','callback','noanswer','notinterested'].forEach(function(x){
+    document.getElementById('oc-'+x).className = 'outcome-btn'+(x===o?' sel-'+x:'');
+  });
+};
+window.nextContact = function() {
+  if(!hasCalledCurrent) return;
+  contacts[currentIndex].status = 'done'; contacts[currentIndex].outcome = currentOutcome;
   updateRowStatus(currentIndex,'done');
-  const cell=document.getElementById(`oc-cell-${currentIndex}`);
-  if(cell){const L={interested:'🟢 Interested',callback:'🔔 Callback',noanswer:'📵 No Answer',notinterested:'🔴 Not Interested','':'—'};cell.textContent=L[currentOutcome]||'—';}
-  calledCount++;currentIndex++;updateStats();showContact(currentIndex);
+  var cell = document.getElementById('oc-cell-'+currentIndex);
+  if(cell){ var L={interested:'🟢 Interested',callback:'🔔 Callback',noanswer:'📵 No Answer',notinterested:'🔴 Not Interested','':'—'}; cell.textContent=L[currentOutcome]||'—'; }
+  calledCount++; currentIndex++; updateStats(); showContact(currentIndex);
+};
+window.skipContact = function() {
+  contacts[currentIndex].status='skipped'; contacts[currentIndex].outcome='skipped';
+  updateRowStatus(currentIndex,'skipped'); skippedCount++; currentIndex++; updateStats(); showContact(currentIndex);
+};
+function updateStats() {
+  document.getElementById('statTotal').textContent=contacts.length;
+  document.getElementById('statDone').textContent=calledCount;
+  document.getElementById('statSkipped').textContent=skippedCount;
+  document.getElementById('statLeft').textContent=contacts.length-currentIndex;
 }
-function skipContact(){contacts[currentIndex].status='skipped';contacts[currentIndex].outcome='skipped';updateRowStatus(currentIndex,'skipped');skippedCount++;currentIndex++;updateStats();showContact(currentIndex);}
-function updateStats(){document.getElementById('statTotal').textContent=contacts.length;document.getElementById('statDone').textContent=calledCount;document.getElementById('statSkipped').textContent=skippedCount;document.getElementById('statLeft').textContent=contacts.length-currentIndex;}
-function updateProgress(){const p=contacts.length?(currentIndex/contacts.length*100).toFixed(0):0;document.getElementById('progressFill').style.width=p+'%';document.getElementById('progressText').textContent=`${currentIndex} / ${contacts.length}`;}
-function setStatus(type,text){const pill=document.getElementById('statusPill');pill.className='status-pill '+type;pill.querySelector('.dot').className=type==='calling'?'dot blink':'dot';document.getElementById('statusText').textContent=text;}
-function allDone(){
-  document.getElementById('dialerPanel').style.display='none';document.getElementById('doneBanner').style.display='block';
-  const oc=contacts.reduce((a,c)=>{a[c.outcome]=(a[c.outcome]||0)+1;return a},{});
-  document.getElementById('doneSummary').textContent=`Called: ${calledCount} · Skipped: ${skippedCount} · Interested: ${oc.interested||0} · Callbacks: ${oc.callback||0}`;
-  setStatus('idle','✓ Complete');updateProgress();
+function updateProgress() {
+  var p = contacts.length ? (currentIndex/contacts.length*100).toFixed(0) : 0;
+  document.getElementById('progressFill').style.width = p+'%';
+  document.getElementById('progressText').textContent = currentIndex+' / '+contacts.length;
 }
-function resetDialer(){
-  contacts=[];currentIndex=0;calledCount=0;skippedCount=0;
-  ['dialerPanel','statsBar','doneBanner','configBar'].forEach(id=>document.getElementById(id).style.display='none');
-  document.getElementById('uploadZone').style.display='block';fileInput.value='';setStatus('idle','Idle');
+function setStatus(type, text) {
+  var pill = document.getElementById('statusPill');
+  pill.className = 'status-pill '+type;
+  pill.querySelector('.dot').className = type==='calling' ? 'dot blink' : 'dot';
+  document.getElementById('statusText').textContent = text;
 }
+function allDone() {
+  document.getElementById('dialerPanel').style.display='none';
+  document.getElementById('doneBanner').style.display='block';
+  var oc = contacts.reduce(function(a,c){ a[c.outcome]=(a[c.outcome]||0)+1; return a; },{});
+  document.getElementById('doneSummary').textContent =
+    'Called: '+calledCount+' · Skipped: '+skippedCount+' · Interested: '+(oc.interested||0)+' · Callbacks: '+(oc.callback||0);
+  setStatus('idle','✓ Complete'); updateProgress();
+}
+window.resetDialer = function() {
+  contacts=[]; currentIndex=0; calledCount=0; skippedCount=0;
+  ['dialerPanel','statsBar','doneBanner','configBar'].forEach(function(id){ document.getElementById(id).style.display='none'; });
+  document.getElementById('uploadZone').style.display='block';
+  var fi=document.getElementById('fileInput'); if(fi) fi.value='';
+  setStatus('idle','Idle');
+};
 
 // ════════════════════════════════════════════════════════
 //  TEMPLATES
 // ════════════════════════════════════════════════════════
-const TEMPLATES={
-  followup:{name:'📋 Follow-up',text:(n,r)=>`Hi ${n||'there'}! 👋\n\nThis is ${r||'your advisor'}. Thank you for taking my call today.\n\nI'd love to share more details about our offerings.\n\nFeel free to reply anytime! 😊`},
-  intro:{name:'👋 Introduction',text:(n,r)=>`Hello ${n||'there'}! 🙏\n\nI'm ${r||'your advisor'} from our sales team. I tried reaching you regarding a special opportunity.\n\nCould we connect at your convenient time? 📅`},
-  callback:{name:'🔔 Callback',text:(n,r)=>`Hi ${n||'there'}! ☎️\n\nI'm ${r||'your advisor'} — I called earlier but couldn't connect.\n\nPlease let me know your best time for a quick call! 🌟`},
-  offer:{name:'🏷️ Special Offer',text:(n,r)=>`Hi ${n||'there'}! 🎉\n\nWe have an exclusive limited-time offer for you.\n\nYour advisor ${r?`(${r}) `:''}wants to make sure you don't miss out.\n\nShall we connect briefly? 🤝`},
-  property:{name:'🏠 Property Info',text:(n,r)=>`Hello ${n||'there'}! 🏠\n\nThis is ${r||'your property advisor'}. I have exciting properties matching your budget and requirements.\n\nCan I send you the details and brochure? 📲`},
-  loan:{name:'💰 Loan Offer',text:(n,r)=>`Hi ${n||'there'}! 💰\n\nI'm ${r||'your financial advisor'}. We have a special pre-approved loan offer:\n✅ Lowest interest rates\n✅ Quick processing\n✅ Minimal documentation\n\nInterested? Let's connect! 📞`}
+var TEMPLATES = {
+  followup: {name:'📋 Follow-up', text:function(n,r){ return 'Hi '+(n||'there')+'! 👋\n\nThis is '+(r||'your advisor')+'. Thank you for taking my call today.\n\nI\'d love to share more details about our offerings.\n\nFeel free to reply anytime! 😊'; }},
+  intro:    {name:'👋 Introduction', text:function(n,r){ return 'Hello '+(n||'there')+'! 🙏\n\nI\'m '+(r||'your advisor')+' from our sales team. I tried reaching you regarding a special opportunity.\n\nCould we connect at your convenient time? 📅'; }},
+  callback: {name:'🔔 Callback', text:function(n,r){ return 'Hi '+(n||'there')+'! ☎️\n\nI\'m '+(r||'your advisor')+' — I called earlier but couldn\'t connect.\n\nPlease let me know your best time for a quick call! 🌟'; }},
+  offer:    {name:'🏷️ Special Offer', text:function(n,r){ return 'Hi '+(n||'there')+'! 🎉\n\nWe have an exclusive limited-time offer for you.\n\nYour advisor '+(r?'('+r+') ':'')+' wants to make sure you don\'t miss out.\n\nShall we connect briefly? 🤝'; }},
+  property: {name:'🏠 Property Info', text:function(n,r){ return 'Hello '+(n||'there')+'! 🏠\n\nThis is '+(r||'your property advisor')+'. I have exciting properties matching your budget.\n\nCan I send you the details and brochure? 📲'; }},
+  loan:     {name:'💰 Loan Offer', text:function(n,r){ return 'Hi '+(n||'there')+'! 💰\n\nI\'m '+(r||'your financial advisor')+'. We have a special pre-approved loan offer:\n✅ Lowest interest rates\n✅ Quick processing\n✅ Minimal documentation\n\nInterested? Let\'s connect! 📞'; }}
 };
-function getRepName(){const meta=currentUser?.user_metadata||{};return meta.full_name||currentUser?.email?.split('@')[0]||'Sales Advisor';}
-function openTemplates(cat){
-  const c=contacts[currentIndex]||{};const repN=getRepName();
-  const list=document.getElementById('tplList');list.innerHTML='';
-  Object.entries(TEMPLATES).forEach(([key,tpl])=>{
-    const msg=tpl.text(c.name,repN);const waUrl=`https://wa.me/91${c.number||''}?text=${encodeURIComponent(msg)}`;
-    const div=document.createElement('div');div.className='tpl-item';
-    div.innerHTML=`<div class="tpl-name">${tpl.name}</div><div class="tpl-preview">${msg.replace(/\n/g,'<br>').substring(0,140)}...</div><div class="tpl-send">👆 Tap to open in WhatsApp</div>`;
-    div.onclick=()=>{window.open(waUrl,'_blank');document.getElementById('tplModal').classList.remove('open');};
+function getRepName() {
+  var meta = (currentUser && currentUser.user_metadata) || {};
+  return meta.full_name || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || 'Sales Advisor';
+}
+window.openTemplates = function(cat) {
+  var c = contacts[currentIndex] || {};
+  var repN = getRepName();
+  var list = document.getElementById('tplList'); list.innerHTML = '';
+  Object.entries(TEMPLATES).forEach(function(entry){
+    var key=entry[0], tpl=entry[1];
+    var msg = tpl.text(c.name, repN);
+    var waUrl = 'https://wa.me/91'+(c.number||'')+'?text='+encodeURIComponent(msg);
+    var div = document.createElement('div'); div.className='tpl-item';
+    div.innerHTML = '<div class="tpl-name">'+tpl.name+'</div>'+
+      '<div class="tpl-preview">'+msg.replace(/\n/g,'<br>').substring(0,140)+'...</div>'+
+      '<div class="tpl-send">👆 Tap to open in WhatsApp</div>';
+    div.onclick = function(){ window.open(waUrl,'_blank'); document.getElementById('tplModal').classList.remove('open'); };
     list.appendChild(div);
   });
   document.getElementById('tplModal').classList.add('open');
-}
+};
 
 // ════════════════════════════════════════════════════════
 //  AI SUMMARY
 // ════════════════════════════════════════════════════════
-function openAISummary(){document.getElementById('aiModal').classList.add('open');generateAISummary();}
-async function generateAISummary(){
-  document.getElementById('aiLoadingDiv').style.display='flex';document.getElementById('aiOutput').style.display='none';
-  const called=contacts.filter(c=>c.status==='done');
-  const oc={interested:0,callback:0,noanswer:0,notinterested:0};called.forEach(c=>{if(oc[c.outcome]!==undefined)oc[c.outcome]++});
-  const repN=getRepName();
-  const intList=called.filter(c=>c.outcome==='interested').map(c=>c.name||`+91${c.number}`).join(', ')||'None';
-  const cbList=called.filter(c=>c.outcome==='callback').map(c=>c.name||`+91${c.number}`).join(', ')||'None';
-  const prompt=`You are a sales manager assistant for Indian real estate/banking sector.\n\nGenerate a concise WhatsApp-ready daily call report.\n\nSales Rep: ${repN}\nDate: ${new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}\nTotal Leads: ${contacts.length} | Called: ${called.length} | Skipped: ${skippedCount}\nInterested: ${oc.interested} | Callback: ${oc.callback} | No Answer: ${oc.noanswer} | Not Interested: ${oc.notinterested}\nHot Leads: ${intList}\nCallbacks Needed: ${cbList}\n\nWrite 150-200 words with: performance overview, hot leads, callbacks, next action.\nFormat for WhatsApp plain text. Start with "📊 Daily Call Report – ${repN}"`;
+window.openAISummary = function(){ document.getElementById('aiModal').classList.add('open'); window.generateAISummary(); };
+window.generateAISummary = async function() {
+  document.getElementById('aiLoadingDiv').style.display='flex';
+  document.getElementById('aiOutput').style.display='none';
+  var called = contacts.filter(function(c){ return c.status==='done'; });
+  var oc = {interested:0,callback:0,noanswer:0,notinterested:0};
+  called.forEach(function(c){ if(oc[c.outcome]!==undefined) oc[c.outcome]++; });
+  var repN = getRepName();
+  var intList = called.filter(function(c){ return c.outcome==='interested'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
+  var cbList  = called.filter(function(c){ return c.outcome==='callback'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
+  var prompt = 'You are a sales manager assistant for Indian real estate/banking sector.\n\nGenerate a concise WhatsApp-ready daily call report.\n\nSales Rep: '+repN+'\nDate: '+new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'\nTotal Leads: '+contacts.length+' | Called: '+called.length+' | Skipped: '+skippedCount+'\nInterested: '+oc.interested+' | Callback: '+oc.callback+' | No Answer: '+oc.noanswer+' | Not Interested: '+oc.notinterested+'\nHot Leads: '+intList+'\nCallbacks Needed: '+cbList+'\n\nWrite 150-200 words with: performance overview, hot leads, callbacks, next action.\nFormat for WhatsApp plain text. Start with "📊 Daily Call Report – '+repN+'"';
   try {
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();
-    document.getElementById('aiOutput').textContent=data.content?.map(b=>b.text||'').join('')||'Unable to generate.';
+    var res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    var data = await res.json();
+    document.getElementById('aiOutput').textContent = data.content ? data.content.map(function(b){ return b.text||''; }).join('') : 'Unable to generate.';
   } catch(e) {
-    document.getElementById('aiOutput').textContent=`📊 Daily Call Report – ${repN}\n\nDate: ${new Date().toLocaleDateString('en-IN')}\nTotal: ${contacts.length} | Called: ${calledCount} | Skipped: ${skippedCount}\n\nInterested: ${oc.interested} | Callback: ${oc.callback}\nNo Answer: ${oc.noanswer} | Not Interested: ${oc.notinterested}\n\nHot Leads: ${intList}\nCallbacks: ${cbList}\n\n⚠️ AI unavailable — manual summary shown.`;
+    document.getElementById('aiOutput').textContent = '📊 Daily Call Report – '+repN+'\n\nDate: '+new Date().toLocaleDateString('en-IN')+'\nTotal: '+contacts.length+' | Called: '+calledCount+' | Skipped: '+skippedCount+'\n\nInterested: '+oc.interested+' | Callback: '+oc.callback+'\nNo Answer: '+oc.noanswer+' | Not Interested: '+oc.notinterested+'\n\nHot Leads: '+intList+'\nCallbacks: '+cbList+'\n\n⚠️ AI unavailable — manual summary shown.';
   }
-  document.getElementById('aiLoadingDiv').style.display='none';document.getElementById('aiOutput').style.display='block';
-}
-function copyAI(){navigator.clipboard.writeText(document.getElementById('aiOutput').textContent).then(()=>alert('✅ Copied!')).catch(()=>alert('Select & copy manually'));}
-function shareAI(){window.open(`https://wa.me/?text=${encodeURIComponent(document.getElementById('aiOutput').textContent)}`,'_blank');}
-
-// MODAL close on backdrop/Esc
-['tplModal','aiModal'].forEach(id=>{
-  document.getElementById(id).addEventListener('click',e=>{if(e.target===e.currentTarget)e.target.classList.remove('open')});
-});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.getElementById('tplModal').classList.remove('open');document.getElementById('aiModal').classList.remove('open');}});
-
-// ════════════════════════════════════════════════════════
-//  EXPOSE ALL FUNCTIONS TO WINDOW (fixes onclick errors)
-// ════════════════════════════════════════════════════════
-Object.assign(window, {
-  showUserAuth, showAdminAuth, backToLanding,
-  switchTab, userLogin, userRegister, verifyOTP, resendOTP, otpMove,
-  adminLogin, adminLogout, loadUsers, adminResetPw, adminToggleStatus,
-  appLogout, toggleTheme, togglePw, checkStrength,
-  startQueue, nextContact, skipContact, markCalled, setOutcome,
-  resetDialer, openTemplates, openAISummary, generateAISummary, copyAI, shareAI
-});
+  document.getElementById('aiLoadingDiv').style.display='none';
+  document.getElementById('aiOutput').style.display='block';
+};
+window.copyAI = function(){ navigator.clipboard.writeText(document.getElementById('aiOutput').textContent).then(function(){ alert('✅ Copied!'); }).catch(function(){ alert('Select & copy manually'); }); };
+window.shareAI = function(){ window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('aiOutput').textContent),'_blank'); };
 </script>
 </body>
 </html>
