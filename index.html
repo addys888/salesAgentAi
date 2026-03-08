@@ -679,7 +679,7 @@ let otpEmail = '', otpTimer = null, otpSeconds = 30;
 //  CHECK SESSION ON LOAD
 // ════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
-  if (!supabase || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+  if (!supabase || SUPABASE_URL === 'https://dxxrcnsfmuqbgaixsbig.supabase.co') return;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
