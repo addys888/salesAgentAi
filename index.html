@@ -6,7 +6,7 @@
 <title>WhatsApp Sales Dialer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    THEME VARIABLES
@@ -649,25 +649,29 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 // ════════════════════════════════════════════════════════
 //  ⚠️  CONFIGURATION — REPLACE THESE WITH YOUR VALUES
 // ════════════════════════════════════════════════════════
-const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';        // e.g. https://xyzxyz.supabase.co
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';   // Supabase anon/public key
-const ADMIN_USER    = 'admin';                     // Change admin username
-const ADMIN_PASS    = 'Addys@270893';                // Change admin password
+const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
+const ADMIN_USER    = 'admin';
+const ADMIN_PASS    = 'Addys@270893';
 
 // ════════════════════════════════════════════════════════
-//  SUPABASE INIT 23 ssss   
+//  SUPABASE INIT
 // ════════════════════════════════════════════════════════
-let supabase;  
+let supabase;
 try {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-  if (SUPABASE_URL === 'https://dxxrcnsfmuqbgaixsbig.supabase.co') document.getElementById('configBanner').style.display = 'block';
+  // UMD build exposes supabasejs.createClient
+  const _sb = window.supabase || window.supabaseJs || window.Supabase;
+  supabase = (_sb && _sb.createClient)
+    ? _sb.createClient(SUPABASE_URL, SUPABASE_ANON)
+    : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') document.getElementById('configBanner').style.display = 'block';
 } catch(e) {
+  console.warn('Supabase init error:', e);
   document.getElementById('configBanner').style.display = 'block';
-  
 }
- 
+
 // ════════════════════════════════════════════════════════
-//  STATE  nn
+//  STATE
 // ════════════════════════════════════════════════════════
 let currentUser = null;
 let contacts = [], currentIndex = 0, calledCount = 0, skippedCount = 0;
@@ -679,7 +683,7 @@ let otpEmail = '', otpTimer = null, otpSeconds = 30;
 //  CHECK SESSION ON LOAD
 // ════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
-  if (!supabase || SUPABASE_URL === 'https://dxxrcnsfmuqbgaixsbig.supabase.co') return;
+  if (!supabase || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
@@ -737,7 +741,7 @@ function switchTab(tab) {
 
 // ════════════════════════════════════════════════════════
 //  USER REGISTER
-// ════════════════════════════════════════════════════════ 
+// ════════════════════════════════════════════════════════
 async function userRegister() {
   const name  = document.getElementById('regName').value.trim();
   const email = document.getElementById('regEmail').value.trim();
@@ -1159,6 +1163,18 @@ function shareAI(){window.open(`https://wa.me/?text=${encodeURIComponent(documen
   document.getElementById(id).addEventListener('click',e=>{if(e.target===e.currentTarget)e.target.classList.remove('open')});
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.getElementById('tplModal').classList.remove('open');document.getElementById('aiModal').classList.remove('open');}});
+
+// ════════════════════════════════════════════════════════
+//  EXPOSE ALL FUNCTIONS TO WINDOW (fixes onclick errors)
+// ════════════════════════════════════════════════════════
+Object.assign(window, {
+  showUserAuth, showAdminAuth, backToLanding,
+  switchTab, userLogin, userRegister, verifyOTP, resendOTP, otpMove,
+  adminLogin, adminLogout, loadUsers, adminResetPw, adminToggleStatus,
+  appLogout, toggleTheme, togglePw, checkStrength,
+  startQueue, nextContact, skipContact, markCalled, setOutcome,
+  resetDialer, openTemplates, openAISummary, generateAISummary, copyAI, shareAI
+});
 </script>
 </body>
 </html>
