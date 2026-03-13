@@ -1308,6 +1308,8 @@ window.generateAISummary = async function() {
 };
 window.copyAI = function(){ navigator.clipboard.writeText(document.getElementById('aiOutput').textContent).then(function(){ alert('✅ Copied!'); }).catch(function(){ alert('Select & copy manually'); }); };
 window.shareAI = function(){ window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('aiOutput').textContent),'_blank'); };
+var ANTHROPIC_KEY = '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';
+
 </script>
 </body>
 </html>
