@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sales Dialer Agent</title>
+<title>WhatsApp Sales Dialer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
@@ -511,7 +511,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div class="header">
       <div class="logo">📲</div>
       <div class="header-text">
-        <h1>Sales Dialer Agent</h1>
+        <h1>WhatsApp Sales Dialer</h1>
         <p>Rapid Call Agent · Real Estate &amp; Banking</p>
       </div>
       <div class="header-right">
@@ -810,59 +810,73 @@ window.userRegister = async function() {
 
     // Use admin-style signup that bypasses email confirmation
     // by passing emailRedirectTo as empty and using signInWithPassword flow
-    console.log('Attempting signup with Supabase URL:', SUPABASE_URL);
+    // Attempt signup
     var res = await sb.auth.signUp({
       email: email,
       password: pass,
-      options: {
-        data: { full_name: name, phone_number: phone, status: 'active' }
-      }
+      options: { data: { full_name: name, phone_number: phone, status: 'active' } }
     });
 
-    console.log('Signup response:', JSON.stringify({ error: res.error, hasUser: !!(res.data && res.data.user), hasSession: !!(res.data && res.data.session) }));
+    console.log('Signup res:', res.error ? res.error.message : 'ok', 'status:', res.error ? res.error.status : 200);
 
-    // Handle "User already registered" gracefully
-    if(res.error) {
-      if(res.error.message && (res.error.message.includes('already') || res.error.status === 400)) {
-        showMsg('registerMsg','❌ Email already registered. Please login instead.');
-      } else {
-        throw res.error;
-      }
+    // Already registered
+    if(res.error && res.error.message && res.error.message.toLowerCase().includes('already')) {
+      showMsg('registerMsg','❌ Email already registered. Please login instead.');
       btn.disabled = false; btn.textContent = 'Create Account →';
       return;
     }
 
-    // Check if user needs email confirmation
+    // 500 from trigger bug — account IS created, just try signing in
+    if(res.error && res.error.status === 500) {
+      console.warn('Signup 500 — trying direct login (account may have been created)');
+      var tryLogin = await sb.auth.signInWithPassword({ email: email, password: pass });
+      if(!tryLogin.error) {
+        currentUser = tryLogin.data.user;
+        // Save profile manually since trigger failed
+        try {
+          await sb.from('user_profiles').upsert({
+            id: currentUser.id, full_name: name, email: email,
+            phone_number: phone, status: 'active'
+          }, { onConflict: 'id' });
+        } catch(pe) { console.warn('profile upsert:', pe); }
+        showMsg('registerMsg','✅ Account created! Entering app...','success');
+        setTimeout(function(){ enterApp(); }, 800);
+        return;
+      }
+      // Account wasn't created either — real error
+      throw res.error;
+    }
+
+    if(res.error) throw res.error;
+
     var user = res.data && res.data.user;
     var session = res.data && res.data.session;
 
     if(session) {
-      // Email confirm is OFF — user is immediately active, log them in
+      // Email confirm OFF — immediately active
       currentUser = user;
-      // Also save profile to user_profiles table
       try {
         await sb.from('user_profiles').upsert({
           id: user.id, full_name: name, email: email,
           phone_number: phone, status: 'active'
-        });
-      } catch(pe) { console.warn('Profile save error (non-fatal):', pe); }
+        }, { onConflict: 'id' });
+      } catch(pe) { console.warn('profile upsert:', pe); }
       showMsg('registerMsg','✅ Account created! Entering app...','success');
       setTimeout(function(){ enterApp(); }, 800);
     } else {
-      // Email confirm is ON — user created but needs confirmation
-      // Save profile with pending status
+      // Email confirm ON — needs confirmation email
       if(user) {
         try {
           await sb.from('user_profiles').upsert({
             id: user.id, full_name: name, email: email,
             phone_number: phone, status: 'pending'
-          });
+          }, { onConflict: 'id' });
         } catch(pe) {}
       }
       showMsg('registerMsg',
-        '✅ Account created! A confirmation email has been sent to ' + email + '. Click the link in the email, then come back and Login.',
+        '✅ Account created! Check ' + email + ' for a confirmation link, then come back and Login.',
         'success');
-      setTimeout(function(){ switchTab('login'); }, 3000);
+      setTimeout(function(){ switchTab('login'); }, 3500);
     }
 
   } catch(e) {
@@ -1285,6 +1299,9 @@ window.openTemplates = function(cat) {
 // ════════════════════════════════════════════════════════
 //  AI SUMMARY
 // ════════════════════════════════════════════════════════
+// ⚠️ Set your Cloudflare Worker URL here after deploying it (see instructions)
+var AI_PROXY_URL = 'https://royal-pine-470f.aaddyyss90.workers.dev/';
+
 window.openAISummary = function(){ document.getElementById('aiModal').classList.add('open'); window.generateAISummary(); };
 window.generateAISummary = async function() {
   document.getElementById('aiLoadingDiv').style.display='flex';
@@ -1296,20 +1313,66 @@ window.generateAISummary = async function() {
   var intList = called.filter(function(c){ return c.outcome==='interested'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
   var cbList  = called.filter(function(c){ return c.outcome==='callback'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
   var prompt = 'You are a sales manager assistant for Indian real estate/banking sector.\n\nGenerate a concise WhatsApp-ready daily call report.\n\nSales Rep: '+repN+'\nDate: '+new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'\nTotal Leads: '+contacts.length+' | Called: '+called.length+' | Skipped: '+skippedCount+'\nInterested: '+oc.interested+' | Callback: '+oc.callback+' | No Answer: '+oc.noanswer+' | Not Interested: '+oc.notinterested+'\nHot Leads: '+intList+'\nCallbacks Needed: '+cbList+'\n\nWrite 150-200 words with: performance overview, hot leads, callbacks, next action.\nFormat for WhatsApp plain text. Start with "📊 Daily Call Report – '+repN+'"';
+
+  // No proxy configured — show formatted manual summary
+  if(!AI_PROXY_URL || AI_PROXY_URL === 'YOUR_CLOUDFLARE_WORKER_URL') {
+    showManualSummary(repN, called, oc, intList, cbList);
+    return;
+  }
+
   try {
-    var res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    var res = await fetch(AI_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt })
+    });
+    if(!res.ok) throw new Error('Proxy error ' + res.status);
     var data = await res.json();
-    document.getElementById('aiOutput').textContent = data.content ? data.content.map(function(b){ return b.text||''; }).join('') : 'Unable to generate.';
+    if(data.error) throw new Error(data.error);
+    document.getElementById('aiOutput').textContent = data.text || data.content || 'No response.';
   } catch(e) {
-    document.getElementById('aiOutput').textContent = '📊 Daily Call Report – '+repN+'\n\nDate: '+new Date().toLocaleDateString('en-IN')+'\nTotal: '+contacts.length+' | Called: '+calledCount+' | Skipped: '+skippedCount+'\n\nInterested: '+oc.interested+' | Callback: '+oc.callback+'\nNo Answer: '+oc.noanswer+' | Not Interested: '+oc.notinterested+'\n\nHot Leads: '+intList+'\nCallbacks: '+cbList+'\n\n⚠️ AI unavailable — manual summary shown.';
+    console.warn('AI proxy error:', e.message);
+    showManualSummary(repN, called, oc, intList, cbList);
   }
   document.getElementById('aiLoadingDiv').style.display='none';
   document.getElementById('aiOutput').style.display='block';
 };
+
+function showManualSummary(repN, called, oc, intList, cbList) {
+  var d = new Date();
+  var dateStr = d.toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  var rate = called.length > 0 ? Math.round((oc.interested / called.length) * 100) : 0;
+  var summary =
+    '📊 Daily Call Report – ' + repN + '\n' +
+    '📅 ' + dateStr + '\n\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    '📞 CALL STATS\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    'Total Leads : ' + contacts.length + '\n' +
+    'Called      : ' + called.length + '\n' +
+    'Skipped     : ' + skippedCount + '\n\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    '📋 OUTCOMES\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    '🟢 Interested    : ' + oc.interested + '\n' +
+    '🔔 Callback      : ' + oc.callback + '\n' +
+    '📵 No Answer     : ' + oc.noanswer + '\n' +
+    '🔴 Not Interested: ' + oc.notinterested + '\n' +
+    '📈 Success Rate  : ' + rate + '%\n\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    '🔥 HOT LEADS\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    intList + '\n\n' +
+    '🔔 CALLBACKS PENDING\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    cbList + '\n\n' +
+    '— Sent from WhatsApp Sales Dialer';
+  document.getElementById('aiOutput').textContent = summary;
+  document.getElementById('aiLoadingDiv').style.display='none';
+  document.getElementById('aiOutput').style.display='block';
+}
 window.copyAI = function(){ navigator.clipboard.writeText(document.getElementById('aiOutput').textContent).then(function(){ alert('✅ Copied!'); }).catch(function(){ alert('Select & copy manually'); }); };
 window.shareAI = function(){ window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('aiOutput').textContent),'_blank'); };
-var ANTHROPIC_KEY = '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';
-
 </script>
 </body>
 </html>
