@@ -6,7 +6,7 @@
 <title>WhatsApp Sales Dialer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    THEME VARIABLES
@@ -657,16 +657,36 @@ const ADMIN_PASS    = 'Addys@270893';
 // ════════════════════════════════════════════════════════
 //  SUPABASE INIT
 // ════════════════════════════════════════════════════════
-let _supabaseClient = null;
-function getSB() {
-  if (_supabaseClient) return _supabaseClient;
+var _sb = null;
+
+function initSupabase() {
   try {
-    const lib = (window.supabase && window.supabase.createClient) ? window.supabase
-              : (window.supabaseJs && window.supabaseJs.createClient) ? window.supabaseJs
-              : null;
-    if (lib) _supabaseClient = lib.createClient(SUPABASE_URL, SUPABASE_ANON);
-  } catch(e) { console.warn('Supabase init:', e); }
-  return _supabaseClient;
+    // UMD bundle exposes window.supabase = { createClient, ... }
+    var lib = (window.supabase && typeof window.supabase.createClient === 'function') ? window.supabase
+            : (window.Supabase && typeof window.Supabase.createClient === 'function') ? window.Supabase
+            : null;
+    if (lib) {
+      _sb = lib.createClient(SUPABASE_URL, SUPABASE_ANON, {
+        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
+        global: { headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON } }
+      });
+      console.log('Supabase ready:', !!_sb);
+    } else {
+      console.error('Supabase lib not found. window keys:', Object.keys(window).filter(function(k){ return k.toLowerCase().includes('supa'); }));
+      document.getElementById('configBanner').style.display = 'block';
+    }
+  } catch(e) {
+    console.error('Supabase init error:', e);
+    document.getElementById('configBanner').style.display = 'block';
+  }
+}
+
+// Init immediately when script runs (CDN already loaded above)
+initSupabase();
+
+function getSB() {
+  if (!_sb) initSupabase();
+  return _sb;
 }
 
 // ════════════════════════════════════════════════════════
@@ -682,15 +702,15 @@ var otpEmail = '', otpTimerInterval = null, otpSeconds = 30;
 //  SESSION CHECK ON LOAD
 // ════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async function() {
-  const sb = getSB();
-  if (!sb) { document.getElementById('configBanner').style.display='block'; return; }
+  if (!_sb) initSupabase();
+  if (!_sb) { document.getElementById('configBanner').style.display='block'; return; }
   try {
-    const { data } = await sb.auth.getSession();
-    if (data.session && data.session.user) {
-      currentUser = data.session.user;
+    var sessionRes = await _sb.auth.getSession();
+    if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
+      currentUser = sessionRes.data.session.user;
       enterApp();
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Session check error:', e); }
 
   // Wire file upload events here too (safe after DOM ready)
   var uz = document.getElementById('uploadZone');
@@ -788,7 +808,7 @@ window.userRegister = async function() {
   var btn = document.getElementById('registerBtn');
   btn.disabled = true; btn.textContent = '⏳ Creating...';
   try {
-    var sb = getSB();
+    var sb = _sb;
     var res = await sb.auth.signUp({
       email: email, password: pass,
       options: { data: { full_name: name, phone_number: phone, status: 'active' }, emailRedirectTo: window.location.href }
@@ -814,7 +834,7 @@ window.userLogin = async function() {
   var btn = document.getElementById('loginBtn');
   btn.disabled = true; btn.textContent = '⏳ Logging in...';
   try {
-    var sb = getSB();
+    var sb = _sb;
     var res = await sb.auth.signInWithPassword({ email: email, password: pass });
     if(res.error) throw res.error;
     currentUser = res.data.user;
@@ -844,7 +864,7 @@ window.verifyOTP = async function() {
   var btn = document.getElementById('verifyBtn');
   btn.disabled = true; btn.textContent = '⏳ Verifying...';
   try {
-    var sb = getSB();
+    var sb = _sb;
     var res = await sb.auth.verifyOtp({ email: otpEmail, token: token, type: 'email' });
     if(res.error) throw res.error;
     currentUser = res.data.user;
@@ -859,7 +879,7 @@ window.verifyOTP = async function() {
 window.resendOTP = async function() {
   document.getElementById('resendBtn').disabled = true;
   try {
-    var sb = getSB();
+    var sb = _sb;
     await sb.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: false } });
     showMsg('otpMsg','📬 New OTP sent!','success');
     startOTPTimer();
@@ -926,7 +946,7 @@ window.loadUsers = async function() {
   document.getElementById('usersEmpty').style.display = 'none';
   document.getElementById('usersTable').style.display = 'none';
   try {
-    var sb = getSB();
+    var sb = _sb;
     var res = await sb.from('user_profiles').select('*').order('created_at', { ascending: false });
     if(res.error) throw res.error;
     var data = res.data;
@@ -974,7 +994,7 @@ function updateAdminStats(total, active, suspended, pending) {
 window.adminResetPw = async function(email) {
   if(!email || !confirm('Send password reset email to '+email+'?')) return;
   try {
-    var sb = getSB();
+    var sb = _sb;
     var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
     if(res.error) throw res.error;
     alert('✅ Password reset email sent to '+email);
@@ -983,7 +1003,7 @@ window.adminResetPw = async function(email) {
 
 window.adminToggleStatus = async function(userId, newStatus) {
   try {
-    var sb = getSB();
+    var sb = _sb;
     var res = await sb.from('user_profiles').update({ status: newStatus }).eq('id', userId);
     if(res.error) throw res.error;
     window.loadUsers();
