@@ -809,19 +809,38 @@ window.userRegister = async function() {
   btn.disabled = true; btn.textContent = '⏳ Creating...';
   try {
     var sb = _sb;
+    if(!sb) throw new Error('Auth service not ready. Please refresh and try again.');
+
+    // Step 1: Sign up (email confirmation disabled in Supabase dashboard)
     var res = await sb.auth.signUp({
-      email: email, password: pass,
-      options: { data: { full_name: name, phone_number: phone, status: 'active' }, emailRedirectTo: window.location.href }
+      email: email,
+      password: pass,
+      options: {
+        data: { full_name: name, phone_number: phone, status: 'active' }
+      }
     });
     if(res.error) throw res.error;
-    otpEmail = email;
-    document.getElementById('userTabsWrap').style.display = 'none';
-    document.getElementById('otpStep').style.display = 'block';
-    document.getElementById('otpDesc').textContent = 'Enter the 6-digit OTP sent to ' + email;
-    startOTPTimer();
-    showMsg('registerMsg','✅ Check your email for the OTP.','success');
+
+    // Step 2: If signup succeeded, immediately sign in (no OTP needed when email confirm is OFF)
+    var loginRes = await sb.auth.signInWithPassword({ email: email, password: pass });
+    if(loginRes.error) {
+      // Account created but can't login yet — likely email confirm is ON in dashboard
+      showMsg('registerMsg','✅ Account created! Check your email to confirm, then login.','success');
+      btn.disabled = false; btn.textContent = 'Create Account →';
+      return;
+    }
+    currentUser = loginRes.data.user;
+    showMsg('registerMsg','✅ Account created! Entering app...','success');
+    setTimeout(function(){ enterApp(); }, 800);
   } catch(e) {
-    showMsg('registerMsg','❌ ' + (e.message || 'Registration failed'));
+    var msg = e.message || 'Registration failed';
+    if(msg.includes('already registered') || msg.includes('already been registered')) {
+      showMsg('registerMsg','❌ This email is already registered. Please login instead.');
+    } else if(msg.includes('500') || msg.includes('Database error')) {
+      showMsg('registerMsg','❌ Server error. Please go to Supabase Dashboard → Authentication → Settings and DISABLE "Enable email confirmations", then try again.');
+    } else {
+      showMsg('registerMsg','❌ ' + msg);
+    }
   }
   btn.disabled = false; btn.textContent = 'Create Account →';
 };
@@ -835,19 +854,16 @@ window.userLogin = async function() {
   btn.disabled = true; btn.textContent = '⏳ Logging in...';
   try {
     var sb = _sb;
+    if(!sb) throw new Error('Auth service not ready. Please refresh.');
     var res = await sb.auth.signInWithPassword({ email: email, password: pass });
     if(res.error) throw res.error;
     currentUser = res.data.user;
-    // Send OTP for 2FA
-    var otpRes = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false } });
-    if(otpRes.error) throw otpRes.error;
-    otpEmail = email;
-    document.getElementById('userTabsWrap').style.display = 'none';
-    document.getElementById('otpStep').style.display = 'block';
-    document.getElementById('otpDesc').textContent = 'OTP sent to ' + email + ' — enter it to verify login';
-    startOTPTimer();
+    showMsg('loginMsg','✅ Login successful! Loading...','success');
+    setTimeout(function(){ enterApp(); }, 600);
   } catch(e) {
-    var msg = e.message === 'Invalid login credentials' ? 'Wrong email or password' : e.message;
+    var msg = e.message;
+    if(msg === 'Invalid login credentials') msg = 'Wrong email or password';
+    else if(msg.includes('Email not confirmed')) msg = 'Please confirm your email first, then login.';
     showMsg('loginMsg','❌ ' + msg);
   }
   btn.disabled = false; btn.textContent = 'Login →';
