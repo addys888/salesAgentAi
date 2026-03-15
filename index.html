@@ -16,6 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    THEME VARIABLES
@@ -790,7 +791,47 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="copyAI()">📋 Copy</button>
       <button class="btn" style="background:rgba(37,211,102,.1);color:var(--green);border:1px solid var(--border2)" onclick="shareAI()">📤 WhatsApp</button>
+      <button class="btn" style="background:rgba(100,181,246,.12);color:#64b5f6;border:1px solid rgba(100,181,246,.3)" onclick="openEmailModal()">📧 Email Report</button>
       <button class="btn btn-ai" onclick="generateAISummary()">🔄 Regenerate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     EMAIL REPORT MODAL
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="emailModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span>📧</span>
+      <h3>Email Report to Manager</h3>
+      <button class="modal-close" onclick="closeEmailModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="emailFormWrap">
+        <div class="field-group">
+          <label class="field-group label">Manager's Email Address</label>
+          <input class="field-input" id="managerEmail" type="email" placeholder="manager@company.com" />
+        </div>
+        <div class="field-group">
+          <label class="field-group label">Your Name (Sender)</label>
+          <input class="field-input" id="senderName" type="text" placeholder="Your name" />
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-top:4px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Preview — Report will be sent as:</div>
+          <div style="font-size:11px;color:var(--text);line-height:1.6" id="emailPreviewText">Generate a summary first to preview.</div>
+        </div>
+        <div id="emailStatusMsg" style="font-size:11px;text-align:center;margin-top:10px;min-height:16px"></div>
+      </div>
+      <div id="emailSuccessWrap" style="display:none;text-align:center;padding:20px 0">
+        <div style="font-size:48px;margin-bottom:12px">✅</div>
+        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent)">Report Sent!</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="emailSentTo"></div>
+      </div>
+    </div>
+    <div class="modal-footer" id="emailModalFooter">
+      <button class="btn btn-ghost" onclick="closeEmailModal()">Cancel</button>
+      <button class="btn" style="background:#64b5f6;color:#000;font-weight:700" id="sendEmailBtn" onclick="sendEmailReport()">📧 Send Report</button>
     </div>
   </div>
 </div>
@@ -1523,6 +1564,128 @@ function showManualSummary(repN, called, oc, intList, cbList) {
 }
 window.copyAI = function(){ navigator.clipboard.writeText(document.getElementById('aiOutput').textContent).then(function(){ alert('✅ Copied!'); }).catch(function(){ alert('Select & copy manually'); }); };
 window.shareAI = function(){ window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('aiOutput').textContent),'_blank'); };
+
+// ════════════════════════════════════════════════════════
+//  EMAIL REPORT via EmailJS
+//  Setup: https://www.emailjs.com (free — 200 emails/month)
+//  1. Sign up at emailjs.com
+//  2. Add Email Service (Gmail recommended) → copy Service ID
+//  3. Create Email Template → copy Template ID
+//  4. Go to Account → copy Public Key
+//  Replace the 3 values below:
+// ════════════════════════════════════════════════════════
+var EMAILJS_PUBLIC_KEY  = 'YOUR_EMAILJS_PUBLIC_KEY';   // from Account page
+var EMAILJS_SERVICE_ID  = 'YOUR_EMAILJS_SERVICE_ID';   // e.g. service_xxxxxxx
+var EMAILJS_TEMPLATE_ID = 'YOUR_EMAILJS_TEMPLATE_ID';  // e.g. template_xxxxxxx
+
+var emailJSReady = false;
+(function initEmailJS(){
+  if(typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY !== 'YOUR_EMAILJS_PUBLIC_KEY') {
+    emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+    emailJSReady = true;
+    console.log('EmailJS ready');
+  }
+})();
+
+window.openEmailModal = function() {
+  // Pre-fill sender name from logged in user
+  var senderEl = document.getElementById('senderName');
+  if(senderEl && currentUser) {
+    var meta = currentUser.user_metadata || {};
+    senderEl.value = meta.full_name || currentUser.email || '';
+  }
+  // Restore saved manager email
+  var saved = localStorage.getItem('managerEmail');
+  if(saved) document.getElementById('managerEmail').value = saved;
+
+  // Show preview of the report
+  var reportText = document.getElementById('aiOutput').textContent || '';
+  var previewEl = document.getElementById('emailPreviewText');
+  if(reportText && reportText.length > 10) {
+    previewEl.textContent = reportText.substring(0, 200) + (reportText.length > 200 ? '...' : '');
+  } else {
+    previewEl.textContent = 'No summary yet — generate one first.';
+  }
+
+  // Reset state
+  document.getElementById('emailFormWrap').style.display = 'block';
+  document.getElementById('emailSuccessWrap').style.display = 'none';
+  document.getElementById('emailModalFooter').style.display = 'flex';
+  document.getElementById('emailStatusMsg').textContent = '';
+  document.getElementById('emailModal').classList.add('open');
+};
+
+window.closeEmailModal = function() {
+  document.getElementById('emailModal').classList.remove('open');
+};
+
+window.sendEmailReport = function() {
+  var toEmail = document.getElementById('managerEmail').value.trim();
+  var fromName = document.getElementById('senderName').value.trim() || 'Sales Rep';
+  var reportText = document.getElementById('aiOutput').textContent || '';
+  var statusEl = document.getElementById('emailStatusMsg');
+  var btn = document.getElementById('sendEmailBtn');
+
+  // Validate
+  if(!toEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = '❌ Please enter a valid email address';
+    return;
+  }
+  if(!reportText || reportText.length < 10) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = '❌ No report to send. Generate a summary first.';
+    return;
+  }
+
+  // Save manager email for next time
+  localStorage.setItem('managerEmail', toEmail);
+
+  // Check EmailJS configured
+  if(EMAILJS_PUBLIC_KEY === 'YOUR_EMAILJS_PUBLIC_KEY') {
+    // Fallback: open mailto link
+    var subject = encodeURIComponent('Daily Call Report — ' + fromName + ' — ' + new Date().toLocaleDateString('en-IN'));
+    var body = encodeURIComponent(reportText);
+    window.open('mailto:' + toEmail + '?subject=' + subject + '&body=' + body);
+    // Show success screen
+    document.getElementById('emailFormWrap').style.display = 'none';
+    document.getElementById('emailModalFooter').style.display = 'none';
+    document.getElementById('emailSuccessWrap').style.display = 'block';
+    document.getElementById('emailSentTo').innerHTML = 'Your email app has opened.<br>Just tap <strong>Send</strong> to deliver the report to ' + toEmail;
+    setTimeout(function(){ closeEmailModal(); }, 4000);
+    return;
+  }
+
+  // Send via EmailJS
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending...';
+  statusEl.textContent = '';
+
+  var templateParams = {
+    to_email:    toEmail,
+    from_name:   fromName,
+    report_date: new Date().toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'}),
+    report_text: reportText,
+    rep_email:   currentUser ? currentUser.email : ''
+  };
+
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+    .then(function() {
+      document.getElementById('emailFormWrap').style.display = 'none';
+      document.getElementById('emailModalFooter').style.display = 'none';
+      document.getElementById('emailSuccessWrap').style.display = 'block';
+      document.getElementById('emailSentTo').textContent = 'Sent to ' + toEmail;
+      // Auto close after 3s
+      setTimeout(function(){ closeEmailModal(); }, 3000);
+    })
+    .catch(function(err) {
+      console.error('EmailJS error:', err);
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = '❌ Failed to send. Check your EmailJS config.';
+      btn.disabled = false;
+      btn.textContent = '📧 Send Report';
+    });
+};
 </script>
 
 <script>
