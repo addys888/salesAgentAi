@@ -170,6 +170,29 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .status-pill.idle{background:rgba(90,122,90,.2);color:var(--muted);border:1px solid var(--muted)}
 .status-pill.active{background:rgba(37,211,102,.15);color:var(--green);border:1px solid var(--green)}
 .status-pill.calling{background:rgba(0,230,118,.15);color:var(--accent);border:1px solid var(--accent);animation:pulse-border 1.5s infinite}
+/* Subscription badge */
+.sub-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:99px;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.3px;border:1px solid transparent;transition:all .3s;cursor:default}
+.sub-badge.safe{background:rgba(37,211,102,.12);color:var(--green);border-color:rgba(37,211,102,.3)}
+.sub-badge.warn{background:rgba(255,171,64,.12);color:var(--warn);border-color:rgba(255,171,64,.35);animation:pulse-border 2s infinite}
+.sub-badge.critical{background:rgba(255,82,82,.15);color:var(--danger);border-color:rgba(255,82,82,.4);animation:pulse-border 1s infinite}
+.sub-badge.expired{background:rgba(255,82,82,.2);color:var(--danger);border-color:var(--danger)}
+/* Expired overlay */
+#expiredOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;align-items:center;justify-content:center;padding:20px}
+#expiredOverlay.show{display:flex}
+.expired-card{background:var(--surface);border:1px solid var(--danger);border-radius:24px;padding:44px 36px;max-width:420px;width:100%;text-align:center;animation:fadeUp .5s ease;box-shadow:0 0 60px rgba(255,82,82,.25)}
+.expired-icon{font-size:60px;margin-bottom:18px}
+.expired-card h2{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--danger);margin-bottom:10px}
+.expired-card p{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:6px}
+.expired-card .admin-contact{margin-top:18px;background:rgba(255,82,82,.07);border:1px solid rgba(255,82,82,.2);border-radius:12px;padding:14px;font-size:12px;color:var(--text)}
+/* Admin subscription input */
+.sub-input{background:var(--input-bg);border:1px solid var(--border2);color:var(--text);padding:5px 9px;border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;outline:none;width:130px}
+.sub-input:focus{border-color:var(--purple)}
+.sub-days-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:99px;font-size:10px;font-weight:700;font-family:'Syne',sans-serif}
+.sub-days-badge.safe{background:rgba(37,211,102,.15);color:var(--green)}
+.sub-days-badge.warn{background:rgba(255,171,64,.15);color:var(--warn)}
+.sub-days-badge.critical{background:rgba(255,82,82,.15);color:var(--danger)}
+.sub-days-badge.expired{background:rgba(255,82,82,.2);color:var(--danger)}
+.sub-days-badge.none{background:var(--surface2);color:var(--muted)}
 .icon-btn{width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid var(--border2);cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .icon-btn:hover{border-color:var(--green);transform:scale(1.05)}
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
@@ -639,7 +662,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <div style="overflow-x:auto">
           <table class="users-table" id="usersTable" style="display:none">
             <thead><tr>
-              <th>#</th><th>Name</th><th>Email</th><th>Mobile</th><th>Registered</th><th>Status</th><th>Actions</th>
+              <th>#</th><th>Name</th><th>Email</th><th>Mobile</th><th>Registered</th><th>Subscription</th><th>Status</th><th>Actions</th>
             </tr></thead>
             <tbody id="usersBody"></tbody>
           </table>
@@ -669,6 +692,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <div class="status-pill idle" id="statusPill">
           <span class="dot"></span><span id="statusText">Idle</span>
         </div>
+        <div class="sub-badge safe" id="subBadge" style="display:none" title="Subscription validity"></div>
         <div class="user-chip" id="userChip">
           <div class="avatar-sm" id="userAvatarSm">?</div>
           <span id="userChipName">User</span>
@@ -833,6 +857,23 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
       <button class="btn btn-ghost" onclick="closeEmailModal()">Cancel</button>
       <button class="btn" style="background:#64b5f6;color:#000;font-weight:700" id="sendEmailBtn" onclick="sendEmailReport()">📧 Send Report</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SUBSCRIPTION EXPIRED OVERLAY
+══════════════════════════════════════════ -->
+<div id="expiredOverlay">
+  <div class="expired-card">
+    <div class="expired-icon">🔒</div>
+    <h2>Subscription Expired</h2>
+    <p>Your subscription has ended and your account has been suspended.</p>
+    <p>Please contact your administrator to renew your subscription.</p>
+    <div class="admin-contact">
+      📞 Contact Admin to restore access<br>
+      <span style="color:var(--muted);font-size:11px">Your data is safe and will be restored upon renewal</span>
+    </div>
+    <button class="auth-btn green" style="margin-top:20px" onclick="appLogout()">← Back to Login</button>
   </div>
 </div>
 
@@ -1184,6 +1225,74 @@ function enterApp() {
   document.getElementById('userAuthScreen').classList.remove('visible');
   document.getElementById('landingScreen').style.display = 'none';
   document.getElementById('appContainer').style.display = 'block';
+  // Check subscription validity from DB
+  checkSubscription();
+}
+
+// ── SUBSCRIPTION CHECK ──
+async function checkSubscription() {
+  if(!currentUser || !_sb) return;
+  try {
+    var res = await _sb.from('user_profiles').select('subscription_end, status').eq('id', currentUser.id).single();
+    if(res.error) return; // silently skip if column doesn't exist yet
+    var profile = res.data;
+
+    // Check if manually suspended
+    if(profile && profile.status === 'suspended') {
+      showExpiredOverlay('Your account has been suspended by the administrator.');
+      return;
+    }
+
+    var subEnd = profile && profile.subscription_end ? new Date(profile.subscription_end) : null;
+    if(!subEnd) {
+      // No subscription set — hide badge, allow access
+      document.getElementById('subBadge').style.display = 'none';
+      return;
+    }
+
+    var now = new Date();
+    now.setHours(0,0,0,0);
+    subEnd.setHours(0,0,0,0);
+    var daysLeft = Math.round((subEnd - now) / (1000 * 60 * 60 * 24));
+
+    if(daysLeft < 0) {
+      // Expired — auto-suspend and show overlay
+      try { await _sb.from('user_profiles').update({ status: 'suspended' }).eq('id', currentUser.id); } catch(e){}
+      showExpiredOverlay('Your subscription expired on ' + subEnd.toLocaleDateString('en-IN') + '.');
+      return;
+    }
+
+    // Show countdown badge
+    renderSubBadge(daysLeft, subEnd);
+
+    // Start daily tick (re-check every hour)
+    clearInterval(window._subTimer);
+    window._subTimer = setInterval(function(){ checkSubscription(); }, 3600000);
+
+  } catch(e) { console.warn('Subscription check (non-fatal):', e.message); }
+}
+
+function renderSubBadge(daysLeft, subEnd) {
+  var badge = document.getElementById('subBadge');
+  badge.style.display = 'inline-flex';
+  var cls, icon, label;
+  if(daysLeft === 0)       { cls='critical'; icon='⚠️'; label='Expires Today!'; }
+  else if(daysLeft <= 7)   { cls='critical'; icon='🔴'; label=daysLeft+'d left'; }
+  else if(daysLeft <= 30)  { cls='warn';     icon='🟡'; label=daysLeft+'d left'; }
+  else                     { cls='safe';     icon='🟢'; label=daysLeft+'d left'; }
+  badge.className = 'sub-badge ' + cls;
+  badge.innerHTML = icon + ' ' + label;
+  badge.title = 'Subscription valid until ' + subEnd.toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'});
+}
+
+function showExpiredOverlay(reason) {
+  document.getElementById('appContainer').style.display = 'none';
+  var overlay = document.getElementById('expiredOverlay');
+  if(reason) {
+    var p = overlay.querySelector('p');
+    if(p) p.textContent = reason;
+  }
+  overlay.classList.add('show');
 }
 
 // ── ADMIN LOGIN ──
@@ -1231,12 +1340,29 @@ window.loadUsers = async function() {
       var suspendBtn = u.status !== 'suspended'
         ? '<button class="action-btn suspend" onclick="adminToggleStatus(\''+u.id+'\',\'suspended\')">🚫 Suspend</button>'
         : '<button class="action-btn activate" onclick="adminToggleStatus(\''+u.id+'\',\'active\')">✅ Activate</button>';
+
+      // Subscription days calculation
+      var subEnd = u.subscription_end ? new Date(u.subscription_end) : null;
+      var subCell = '';
+      if(!subEnd) {
+        subCell = '<span class="sub-days-badge none">Not Set</span>';
+      } else {
+        var now2 = new Date(); now2.setHours(0,0,0,0);
+        var se2 = new Date(subEnd); se2.setHours(0,0,0,0);
+        var dl = Math.round((se2 - now2)/(1000*60*60*24));
+        var sc = dl < 0 ? 'expired' : dl <= 7 ? 'critical' : dl <= 30 ? 'warn' : 'safe';
+        var sl = dl < 0 ? 'EXPIRED' : dl === 0 ? 'Today!' : dl+'d left';
+        subCell = '<span class="sub-days-badge '+sc+'" title="'+se2.toLocaleDateString('en-IN')+'">'+sl+'</span>';
+      }
+      var subDateVal = subEnd ? subEnd.toISOString().split('T')[0] : '';
+
       tr.innerHTML =
         '<td style="color:var(--muted)">'+(i+1)+'</td>'+
         '<td style="font-weight:600">'+(u.full_name||'—')+'</td>'+
         '<td style="color:var(--muted)">'+(u.email||'—')+'</td>'+
         '<td class="mono">'+(u.phone_number||'—')+'</td>'+
         '<td style="color:var(--muted);font-size:11px">'+(u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '—')+'</td>'+
+        '<td>'+subCell+'<br><input type="date" class="sub-input" value="'+subDateVal+'" onchange="adminSetSubscription(\''+u.id+'\',this.value)" style="margin-top:5px" title="Set subscription end date"></td>'+
         '<td><span class="user-badge '+(u.status||'active')+'">'+(u.status||'active').toUpperCase()+'</span></td>'+
         '<td><button class="action-btn reset" onclick="adminResetPw(\''+u.email+'\')">✉️ Reset PW</button>'+suspendBtn+'</td>';
       body.appendChild(tr);
@@ -1272,7 +1398,26 @@ window.adminToggleStatus = async function(userId, newStatus) {
     var res = await sb.from('user_profiles').update({ status: newStatus }).eq('id', userId);
     if(res.error) throw res.error;
     window.loadUsers();
-  } catch(e) { alert('❌ Failed: '+e.message); }
+  } catch(e) { alert('Failed: '+e.message); }
+};
+
+window.adminSetSubscription = async function(userId, dateValue) {
+  if(!dateValue) return;
+  try {
+    var sb = _sb;
+    var updateData = { subscription_end: dateValue };
+    var profRes = await sb.from('user_profiles').select('status').eq('id', userId).single();
+    if(!profRes.error && profRes.data && profRes.data.status === 'suspended') {
+      updateData.status = 'active';
+    }
+    var res = await sb.from('user_profiles').update(updateData).eq('id', userId);
+    if(res.error) throw res.error;
+    var endDate = new Date(dateValue);
+    var now3 = new Date(); now3.setHours(0,0,0,0);
+    var daysSet = Math.round((endDate - now3)/(1000*60*60*24));
+    alert('Subscription set to ' + endDate.toLocaleDateString('en-IN') + ' (' + daysSet + ' days).' + (updateData.status === 'active' ? ' User re-activated.' : ''));
+    window.loadUsers();
+  } catch(e) { alert('Failed to set subscription: '+e.message); }
 };
 
 window.appLogout = async function() {
