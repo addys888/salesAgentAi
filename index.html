@@ -636,7 +636,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <h1>Admin Dashboard</h1>
         <p>User Management · Sales Dialer System</p>
       </div>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span id="superAdminBadge" style="display:none;background:rgba(255,171,64,.15);color:var(--warn);border:1px solid rgba(255,171,64,.4);border-radius:99px;padding:4px 12px;font-size:10px;font-weight:700;letter-spacing:.5px">⚡ SUPER ADMIN</span>
         <button class="icon-btn" onclick="toggleTheme()" id="adminThemeBtn" title="Toggle theme">🌙</button>
         <button class="btn btn-ghost" onclick="adminLogout()">← Logout</button>
       </div>
@@ -884,7 +885,9 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
 const ADMIN_USER    = 'admin';
-const ADMIN_PASS    = 'Addys@270893';
+const ADMIN_PASS    = 'Addys@270893';   // ← Client manager gets this
+const SUPER_PASS    = 'SuprAdmin@9999'; // ← Only YOU know this — change it!
+var isSuperAdmin = false; // true only when logged in with SUPER_PASS
 
 // ════════════════════════════════════════════════════════
 //  SUPABASE INIT
@@ -922,6 +925,7 @@ function getSB() {
 //  STATE
 // ════════════════════════════════════════════════════════
 var currentUser = null;
+var isAdminSession = false; // true when logged in as admin (no subscription badge shown)
 var contacts = [], currentIndex = 0, calledCount = 0, skippedCount = 0;
 var hasCalledCurrent = false, currentOutcome = '';
 var isDark = true;
@@ -1232,6 +1236,11 @@ function enterApp() {
 // ── SUBSCRIPTION CHECK ──
 async function checkSubscription() {
   if(!currentUser || !_sb) return;
+  // Admin session — never show subscription badge or block access
+  if(isAdminSession) {
+    document.getElementById('subBadge').style.display = 'none';
+    return;
+  }
   try {
     var res = await _sb.from('user_profiles').select('subscription_end, status').eq('id', currentUser.id).single();
     if(res.error) return; // silently skip if column doesn't exist yet
@@ -1299,9 +1308,16 @@ function showExpiredOverlay(reason) {
 window.adminLogin = function() {
   var u = document.getElementById('adminUser').value.trim();
   var p = document.getElementById('adminPass').value;
-  if(u === ADMIN_USER && p === ADMIN_PASS) {
+  var validAdmin = (u === ADMIN_USER && p === ADMIN_PASS);
+  var validSuper = (u === ADMIN_USER && p === SUPER_PASS);
+  if(validAdmin || validSuper) {
+    isAdminSession = true;
+    isSuperAdmin = validSuper; // only true when YOUR password used
     document.getElementById('adminAuthScreen').classList.remove('visible');
     document.getElementById('adminPanel').style.display = 'block';
+    // Show/hide super admin badge in header
+    var badge = document.getElementById('superAdminBadge');
+    if(badge) badge.style.display = isSuperAdmin ? 'inline-flex' : 'none';
     window.loadUsers();
   } else {
     showMsg('adminMsg','❌ Invalid admin credentials');
@@ -1310,6 +1326,8 @@ window.adminLogin = function() {
 };
 
 window.adminLogout = function() {
+  isAdminSession = false;
+  isSuperAdmin = false;
   document.getElementById('adminPanel').style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex';
 };
@@ -1362,7 +1380,7 @@ window.loadUsers = async function() {
         '<td style="color:var(--muted)">'+(u.email||'—')+'</td>'+
         '<td class="mono">'+(u.phone_number||'—')+'</td>'+
         '<td style="color:var(--muted);font-size:11px">'+(u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '—')+'</td>'+
-        '<td>'+subCell+'<br><input type="date" class="sub-input" value="'+subDateVal+'" onchange="adminSetSubscription(\''+u.id+'\',this.value)" style="margin-top:5px" title="Set subscription end date"></td>'+
+        '<td>'+subCell+(isSuperAdmin ? '<br><input type="date" class="sub-input" value="'+subDateVal+'" onchange="adminSetSubscription(\''+u.id+'\',this.value)" style="margin-top:5px" title="Set subscription end date (Super Admin only)">' : '')+'</td>'+
         '<td><span class="user-badge '+(u.status||'active')+'">'+(u.status||'active').toUpperCase()+'</span></td>'+
         '<td><button class="action-btn reset" onclick="adminResetPw(\''+u.email+'\')">✉️ Reset PW</button>'+suspendBtn+'</td>';
       body.appendChild(tr);
@@ -1402,6 +1420,7 @@ window.adminToggleStatus = async function(userId, newStatus) {
 };
 
 window.adminSetSubscription = async function(userId, dateValue) {
+  if(!isSuperAdmin) { alert('⛔ Only Super Admin can change subscription dates.'); return; }
   if(!dateValue) return;
   try {
     var sb = _sb;
