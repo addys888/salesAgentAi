@@ -2,7 +2,16 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sales Dialer">
+<meta name="application-name" content="Sales Dialer">
+<meta name="theme-color" content="#0a0f0d">
+<meta name="description" content="WhatsApp Sales Dialer — Smart calling tool for Indian sales teams">
+<link rel="manifest" id="pwa-manifest">
+<link rel="apple-touch-icon" href="https://img.icons8.com/color/192/whatsapp.png">
 <title>WhatsApp Sales Dialer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -117,10 +126,12 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .admin-header h1{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--purple)}
 .admin-header p{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
 .admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+@media(max-width:600px){.admin-stats{grid-template-columns:repeat(2,1fr)}}
 .astat{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:16px;text-align:center}
 .astat .val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--purple)}
 .astat .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
 .admin-panel-card{background:var(--surface);border:1px solid var(--border2);border-radius:18px;overflow:hidden;margin-bottom:20px}
+.table-scroll-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .acard-header{background:var(--surface2);padding:14px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border2)}
 .acard-header h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--purple);flex:1}
 .users-table{width:100%;border-collapse:collapse}
@@ -146,11 +157,12 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 ═══════════════════════════════════════════════ */
 #appContainer{display:none;position:relative;z-index:1}
 .container{max-width:980px;margin:0 auto;padding:28px 20px}
-.header{display:flex;align-items:center;gap:14px;margin-bottom:28px;animation:slideDown .6s ease}
+@media(max-width:480px){.container{padding:16px 12px}}
+.header{display:flex;align-items:center;gap:14px;margin-bottom:28px;animation:slideDown .6s ease;flex-wrap:wrap}
 .logo{width:48px;height:48px;background:var(--green);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 24px rgba(37,211,102,.35);flex-shrink:0}
 .header-text h1{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent);letter-spacing:-.5px}
 .header-text p{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:1px;text-transform:uppercase}
-.header-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .user-chip{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border2);border-radius:99px;padding:5px 12px 5px 8px;font-size:11px;color:var(--muted)}
 .user-chip .avatar-sm{width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700}
 .status-pill{padding:5px 12px;border-radius:99px;font-size:11px;display:flex;align-items:center;gap:6px;transition:all .3s}
@@ -178,6 +190,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .config-bar{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:18px 20px;margin-bottom:20px;display:none;animation:fadeUp .4s ease}
 .config-bar h4{font-family:'Syne',sans-serif;font-size:12px;color:var(--green);margin-bottom:14px}
 .config-fields{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+@media(max-width:480px){.config-fields{flex-direction:column}.config-field{width:100%}}
 .config-field{display:flex;flex-direction:column;gap:4px}
 .config-field label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
 .config-field select,.config-field input[type=text]{background:var(--input-bg);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;outline:none}
@@ -288,13 +301,150 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 @keyframes ring{0%{transform:scale(1);opacity:1}100%{transform:scale(1.45);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-@media(max-width:600px){
+/* ═══════════════════════════════════════════════
+   RESPONSIVE — TABLET (max 768px)
+═══════════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Landing */
+  .landing-wrap{max-width:100%;padding:0 8px}
+  .landing-wrap h1{font-size:22px}
+  .landing-logo{font-size:48px;margin-bottom:14px}
+
+  /* Auth */
+  .auth-card{padding:28px 20px;border-radius:18px;max-width:100%}
+  .auth-logo-wrap h2{font-size:19px}
+
+  /* App layout */
+  #appScreen{padding:10px}
+  .app-card{border-radius:16px}
+
+  /* Header */
+  .app-header{padding:12px 16px;flex-wrap:wrap;gap:8px}
+  .app-header .rep-info{font-size:11px}
+  .header-actions{gap:6px}
+
+  /* Stats */
+  .stats-bar,.admin-stats{grid-template-columns:repeat(2,1fr);gap:8px;padding:12px}
+  .stat-val{font-size:22px}
+
+  /* Current call card */
+  .current-call{flex-direction:column;align-items:stretch;gap:12px;padding:14px 16px}
+  .call-info .num{font-size:22px;letter-spacing:1px}
+  .call-actions{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px}
+  .call-buttons{justify-content:flex-start;flex-wrap:wrap;gap:8px}
+
+  /* Outcome & template rows */
+  .outcome-row,.templates-row{padding:10px 14px;gap:6px}
+  .outcome-btn{padding:5px 10px;font-size:10px}
+  .tpl-chip{font-size:10px;padding:4px 10px}
+
+  /* Queue table */
+  .queue-table th,.queue-table td{padding:8px 10px;font-size:11px}
+
+  /* Modal */
+  .modal{border-radius:16px;max-height:92vh}
+  .modal-footer{flex-direction:column}
+  .modal-footer .btn{width:100%;justify-content:center}
+}
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE — MOBILE (max 480px)
+═══════════════════════════════════════════════ */
+@media(max-width:480px){
+  /* Landing */
+  .role-cards{grid-template-columns:1fr;gap:12px}
+  .landing-wrap h1{font-size:20px}
+  .landing-logo{font-size:42px}
+  .landing-wrap>p{margin-bottom:24px}
+  .role-card{padding:22px 18px}
+  .role-icon{font-size:32px;margin-bottom:10px}
+
+  /* Auth */
+  .auth-screen{padding:12px;align-items:flex-start;padding-top:40px}
+  .auth-card{padding:24px 16px;border-radius:16px}
+  .auth-logo-wrap .icon{font-size:36px}
+  .auth-logo-wrap h2{font-size:17px}
+  .otp-group{gap:5px}
+  .otp-input{width:42px;height:46px;font-size:18px}
+  .field-input{font-size:13px;padding:11px 12px}
+  .auth-btn{padding:12px;font-size:13px}
+
+  /* App header */
+  .app-header{padding:10px 12px}
+  .app-header h1{font-size:13px}
+  .btn{font-size:11px;padding:7px 12px;gap:5px}
+
+  /* Stats — 2 col on small mobile */
+  .stats-bar,.admin-stats{grid-template-columns:repeat(2,1fr);gap:6px;padding:10px 12px}
+  .stat-card{padding:12px 10px;border-radius:12px}
+  .stat-val{font-size:20px}
+  .stat-lbl{font-size:9px}
+
+  /* Upload zone */
+  .upload-zone{padding:24px 16px;margin:12px}
+  .upload-zone .upload-icon{font-size:36px}
+  .upload-zone h3{font-size:14px}
+  .upload-zone p{font-size:11px}
+
+  /* Current call — full width stacked */
+  .current-call{padding:12px 12px;gap:10px}
+  .call-info .lbl{font-size:9px}
+  .call-info .num{font-size:19px;letter-spacing:0}
+  .call-info .cname{font-size:12px}
+  .call-buttons{width:100%;gap:7px}
+  .btn-call,.btn-phone{flex:1;justify-content:center;padding:11px 8px;font-size:12px}
+  .btn-next,.btn-skip{padding:9px 12px;font-size:11px}
+
+  /* Outcome row — wrap nicely */
+  .outcome-row,.templates-row{padding:8px 12px;gap:5px}
+  .section-lbl{display:none} /* hide label on tiny screens */
+  .outcome-btn{padding:5px 9px;font-size:10px;flex:1;text-align:center}
+
+  /* Template chips */
+  .tpl-chip{font-size:10px;padding:4px 8px}
+  .templates-row{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .templates-row::-webkit-scrollbar{display:none}
+
+  /* Progress bar */
+  .progress-wrap{padding:9px 12px}
+  .progress-text{font-size:10px}
+
+  /* Queue table — hide less important cols */
+  .queue-table .col-idx{display:none}
+  .queue-table th,.queue-table td{padding:7px 8px;font-size:11px}
+
+  /* Done banner */
+  .done-banner{padding:20px 14px}
+  .done-banner h2{font-size:17px}
+  .done-actions{flex-direction:column;align-items:stretch}
+  .done-actions .btn{justify-content:center}
+
+  /* Modals — slide up from bottom on mobile */
+  .modal-overlay{align-items:flex-end;padding:0}
+  .modal{border-radius:20px 20px 0 0;max-height:90vh;width:100%}
+  .modal-footer{flex-direction:column;padding:12px 16px 24px}
+  .modal-footer .btn{width:100%;justify-content:center;padding:12px}
+  .ai-output{font-size:12px;padding:14px}
+
+  /* Admin panel */
+  .admin-header{flex-direction:column;align-items:flex-start;gap:8px}
+  .users-table th,.users-table td{padding:7px 8px;font-size:11px}
+  .users-table .col-email{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Note footer */
+  .note{font-size:9px;padding:0 12px}
+}
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE — TINY PHONES (max 360px)
+═══════════════════════════════════════════════ */
+@media(max-width:360px){
+  .otp-input{width:38px;height:42px;font-size:16px}
+  .otp-group{gap:4px}
+  .call-info .num{font-size:17px}
   .stats-bar,.admin-stats{grid-template-columns:repeat(2,1fr)}
-  .role-cards{grid-template-columns:1fr}
-  .current-call{flex-direction:column;align-items:flex-start}
-  .call-actions{flex-direction:row;flex-wrap:wrap}
-  .call-info .num{font-size:20px}
-  .auth-card{padding:28px 20px}
+  .stat-val{font-size:18px}
+  .btn-call,.btn-phone{font-size:11px;padding:10px 6px}
 }
 </style>
 </head>
@@ -497,7 +647,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     </div>
 
     <div class="note" style="color:var(--muted)">
-      🔐 Admin credentials: username <strong>admin</strong> · password <strong>Admin@2024</strong> — Change these in the source code<br>
+      🔐 Admin credentials: username <strong>admin</strong> · password <strong>Addys@270893</strong> — Change these in the source code<br>
       Supabase stores all user data securely server-side. Users cannot bypass authentication.
     </div>
   </div>
@@ -1373,6 +1523,92 @@ function showManualSummary(repN, called, oc, intList, cbList) {
 }
 window.copyAI = function(){ navigator.clipboard.writeText(document.getElementById('aiOutput').textContent).then(function(){ alert('✅ Copied!'); }).catch(function(){ alert('Select & copy manually'); }); };
 window.shareAI = function(){ window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('aiOutput').textContent),'_blank'); };
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  PWA — MANIFEST + SERVICE WORKER
+// ════════════════════════════════════════════════════════
+
+// Inject manifest dynamically (works from any host including GitHub Pages)
+(function() {
+  var manifest = {
+    name: "WhatsApp Sales Dialer",
+    short_name: "Sales Dialer",
+    description: "Smart calling tool for Indian sales teams",
+    start_url: window.location.href,
+    display: "standalone",
+    background_color: "#0a0f0d",
+    theme_color: "#0a0f0d",
+    orientation: "portrait",
+    icons: [
+      { src: "https://img.icons8.com/color/192/whatsapp.png", sizes: "192x192", type: "image/png" },
+      { src: "https://img.icons8.com/color/512/whatsapp.png", sizes: "512x512", type: "image/png" }
+    ]
+  };
+  var blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  document.getElementById('pwa-manifest').setAttribute('href', url);
+})();
+
+// Register Service Worker for offline support
+if ('serviceWorker' in navigator) {
+  var swCode = `
+    var CACHE = 'sales-dialer-v1';
+    var ASSETS = ['/'];
+
+    self.addEventListener('install', function(e) {
+      e.waitUntil(
+        caches.open(CACHE).then(function(cache) {
+          return cache.addAll(ASSETS);
+        })
+      );
+      self.skipWaiting();
+    });
+
+    self.addEventListener('activate', function(e) {
+      e.waitUntil(
+        caches.keys().then(function(keys) {
+          return Promise.all(keys.filter(function(k){ return k !== CACHE; }).map(function(k){ return caches.delete(k); }));
+        })
+      );
+      self.clients.claim();
+    });
+
+    self.addEventListener('fetch', function(e) {
+      if (e.request.method !== 'GET') return;
+      e.respondWith(
+        fetch(e.request).catch(function() {
+          return caches.match(e.request);
+        })
+      );
+    });
+  `;
+  var swBlob = new Blob([swCode], { type: 'application/javascript' });
+  var swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl, { scope: '/' })
+    .then(function(reg) { console.log('SW registered:', reg.scope); })
+    .catch(function(e) { console.warn('SW registration failed (non-fatal):', e.message); });
+}
+
+// Show install prompt for Android Chrome
+var deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show a subtle install banner
+  var banner = document.createElement('div');
+  banner.id = 'installBanner';
+  banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#25D366;color:#000;padding:12px 20px;border-radius:30px;font-weight:700;font-size:13px;z-index:9999;cursor:pointer;box-shadow:0 4px 20px rgba(37,211,102,0.4);white-space:nowrap;';
+  banner.textContent = '📲 Install App on your Phone';
+  banner.onclick = function() {
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(function(){ banner.remove(); });
+  };
+  document.body.appendChild(banner);
+  // Auto-hide after 8 seconds
+  setTimeout(function(){ if(banner.parentNode) banner.remove(); }, 8000);
+});
 </script>
 </body>
 </html>
