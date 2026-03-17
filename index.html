@@ -872,6 +872,36 @@ tr.current .jump-btn{display:none}
 </div>
 
 <!-- ══════════════════════════════════════════
+     RESET PASSWORD MODAL
+     Shown when user arrives via password reset email link
+══════════════════════════════════════════ -->
+<div id="resetPwOverlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:99999;align-items:center;justify-content:center;padding:20px">
+  <div class="auth-card" style="max-width:420px">
+    <div class="auth-logo-wrap user">
+      <span class="icon">🔐</span>
+      <h2 style="color:var(--green)">Set New Password</h2>
+      <p>Enter your new password below</p>
+    </div>
+    <div class="field-group">
+      <label>🔒 New Password</label>
+      <div class="pw-toggle">
+        <input type="password" class="field-input" id="newPw1" placeholder="Minimum 8 characters" autocomplete="new-password">
+        <span class="pw-eye" onclick="togglePw('newPw1',this)">👁</span>
+      </div>
+    </div>
+    <div class="field-group">
+      <label>🔒 Confirm New Password</label>
+      <div class="pw-toggle">
+        <input type="password" class="field-input" id="newPw2" placeholder="Re-enter your new password" autocomplete="new-password">
+        <span class="pw-eye" onclick="togglePw('newPw2',this)">👁</span>
+      </div>
+    </div>
+    <div id="resetPwMsg" class="auth-msg"></div>
+    <button class="auth-btn green" id="resetPwBtn" onclick="submitNewPassword()" style="margin-top:12px">Set New Password →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      SUBSCRIPTION EXPIRED OVERLAY
 ══════════════════════════════════════════ -->
 <div id="expiredOverlay">
@@ -922,42 +952,42 @@ tr.current .jump-btn{display:none}
 // ════════════════════════════════════════════════════════
 const APP_CONFIG = {
   // ── Branding ──────────────────────────────────────────
-  appName:        'CallSmart Pro',         // Main app title (header + tab)
-  appSubtitle:    'Dial Faster · Close Smarter', // Header subtitle
-  appEmoji:       '☎️',                         // Logo emoji
-  landingTitle:   'CallSmart Pro',          // Landing screen H1
-  landingTagline: 'Your teams calling command centre', // Landing tagline
-  appMetaDesc:    'CallSmart Pro — Outbound calling platform built for Indian sales teams',
+  appName:        'Sales Dialer Agent',         // Main app title (header + tab)
+  appSubtitle:    'Rapid Call Agent · Built for Sales Teams', // Header subtitle
+  appEmoji:       '📲',                         // Logo emoji
+  landingTitle:   'Sales Dialer Agent',          // Landing screen H1
+  landingTagline: 'Smart Calling Tool · Built for Sales Teams', // Landing tagline
+  appMetaDesc:    'WhatsApp Sales Dialer — Smart calling tool for Indian sales teams',
 
   // ── User Auth Screen ──────────────────────────────────
-  userAuthTitle:  'Rep Login',                 // Auth screen heading
-  userAuthSub:    'Sales Representative Portal · Secure Access',
+  userAuthTitle:  'User Login',                 // Auth screen heading
+  userAuthSub:    'Sales Rep Access · Powered by Supabase',
 
   // ── Admin Auth Screen ─────────────────────────────────
-  adminAuthTitle: 'Manager Console',
-  adminAuthSub:   'Authorised Personnel Only',
-  adminDashTitle: 'Manager Console',
-  adminDashSub:   'Team Oversight · User Controls',
+  adminAuthTitle: 'Admin Panel',
+  adminAuthSub:   'Team Management · Restricted Access',
+  adminDashTitle: 'Admin Dashboard',
+  adminDashSub:   'User Management · Sales Dialer System',
 
   // ── Dialer Labels ─────────────────────────────────────
-  dialerTitle:    'CallSmart Pro',      // In-app header H1
-  uploadTitle:    'Upload your lead list to begin',
-  uploadSubtitle: 'Accepts Excel or CSV · Indian mobile numbers auto-detected',
+  dialerTitle:    'WhatsApp Sales Dialer',      // In-app header H1
+  uploadTitle:    'Drop your lead Excel file here',
+  uploadSubtitle: 'Upload the spreadsheet with your customer mobile numbers',
   sessionDoneTitle: 'Session Complete!',
-  footerNote:     '🔒 Your data stays private · Enterprise-grade security · Works on any device',
+  footerNote:     '🔒 All call data stays in your browser · Secured by Supabase Auth · Works on desktop & mobile',
 
   // ── Role Cards ────────────────────────────────────────
-  userCardTitle:  'Sales Rep',
-  userCardDesc:   'Login to your dialer, upload leads and start calling',
-  adminCardTitle: 'Manager',
-  adminCardDesc:  'Manage your team, track activity and control access',
+  userCardTitle:  'User Login',
+  userCardDesc:   'Sales reps login to access their dialer dashboard and call leads',
+  adminCardTitle: 'Admin Panel',
+  adminCardDesc:  'Manage users, reset passwords, view call stats and team activity',
 };
 
 // Apply config to all DOM elements that reference it
 function applyAppConfig() {
   var C = APP_CONFIG;
   // Page title
-  document.title = C.appName + ' — A Rapid Dialer';
+  document.title = C.appName + ' — Sales Dialer';
   // Landing
   var lh = document.getElementById('landingH1');     if(lh)  lh.textContent = C.landingTitle;
   var lt = document.getElementById('landingTagline'); if(lt)  lt.textContent = C.landingTagline;
@@ -1043,6 +1073,31 @@ var otpEmail = '', otpTimerInterval = null, otpSeconds = 30;
 window.addEventListener('DOMContentLoaded', async function() {
   if (!_sb) initSupabase();
   if (!_sb) { document.getElementById('configBanner').style.display='block'; return; }
+
+  // ── Detect password reset link ──
+  // When user clicks Reset Password in email, Supabase appends tokens to the URL hash
+  var hash = window.location.hash;
+  if(hash && hash.includes('type=recovery')) {
+    // Let Supabase exchange the token from the URL automatically
+    var hashParams = {};
+    hash.replace('#','').split('&').forEach(function(pair){
+      var kv = pair.split('=');
+      hashParams[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]||'');
+    });
+    if(hashParams['error']) {
+      alert('❌ This password reset link has expired. Please ask your admin to send a new one.');
+      window.location.hash = '';
+    } else {
+      // Session is established via the URL token — show the set-new-password form
+      var overlay = document.getElementById('resetPwOverlay');
+      overlay.style.display = 'flex';
+      // Clear the hash from URL for cleanliness
+      history.replaceState(null, '', window.location.pathname);
+    }
+    return; // Don't proceed to normal session check
+  }
+
+  // ── Normal session check ──
   try {
     var sessionRes = await _sb.auth.getSession();
     if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
@@ -1544,6 +1599,57 @@ window.adminSetSubscription = async function(userId, dateValue) {
     alert('Subscription set to ' + endDate.toLocaleDateString('en-IN') + ' (' + daysSet + ' days).' + (updateData.status === 'active' ? ' User re-activated.' : ''));
     window.loadUsers();
   } catch(e) { alert('Failed to set subscription: '+e.message); }
+};
+
+// ── PASSWORD RESET SUBMIT ──
+window.submitNewPassword = async function() {
+  var p1 = document.getElementById('newPw1').value;
+  var p2 = document.getElementById('newPw2').value;
+  var msg = document.getElementById('resetPwMsg');
+  var btn = document.getElementById('resetPwBtn');
+
+  if(p1.length < 8) {
+    msg.className = 'auth-msg error';
+    msg.textContent = '❌ Password must be at least 8 characters';
+    return;
+  }
+  if(p1 !== p2) {
+    msg.className = 'auth-msg error';
+    msg.textContent = '❌ Passwords do not match';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving...';
+  msg.textContent = '';
+
+  try {
+    var sb = _sb;
+    // Supabase has already set the session from the URL token
+    // We just need to update the password
+    var res = await sb.auth.updateUser({ password: p1 });
+    if(res.error) throw res.error;
+
+    msg.className = 'auth-msg success';
+    msg.textContent = '✅ Password updated successfully!';
+    btn.textContent = 'Password Set →';
+
+    // Auto redirect to login after 2 seconds
+    setTimeout(function() {
+      document.getElementById('resetPwOverlay').style.display = 'none';
+      // Sign out so they log in fresh with the new password
+      sb.auth.signOut().then(function(){
+        document.getElementById('landingScreen').style.display = 'flex';
+        showToast('✅ Password updated — please login with your new password');
+      });
+    }, 2000);
+
+  } catch(e) {
+    msg.className = 'auth-msg error';
+    msg.textContent = '❌ ' + (e.message || 'Failed to update password');
+    btn.disabled = false;
+    btn.textContent = 'Set New Password →';
+  }
 };
 
 window.appLogout = async function() {
