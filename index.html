@@ -1032,6 +1032,7 @@ function getSB() {
 var currentUser = null;
 var isAdminSession = false; // true when logged in as admin (no subscription badge shown)
 var contacts = [], currentIndex = 0, calledCount = 0, skippedCount = 0;
+var jumpReturnIndex = -1; // -1 = no jump in progress; >=0 = return here after jump
 var hasCalledCurrent = false, currentOutcome = '';
 var isDark = true;
 var otpEmail = '', otpTimerInterval = null, otpSeconds = 30;
@@ -1644,23 +1645,36 @@ function buildTable() {
 
 // Jump to any contact in the queue freely
 window.jumpToContact = function(i) {
-  if(i === currentIndex) return; // already here
+  if(i === currentIndex) return;
   if(contacts[i].status === 'done') {
-    if(!confirm('This contact is already marked as called. Jump to it anyway?')) return;
+    if(!confirm('This contact is already called. Jump to re-call?')) return;
+    // Reset it so it can be called again
+    contacts[i].status = 'pending'; contacts[i].outcome = '';
+    updateRowStatus(i, 'pending');
+    calledCount = Math.max(0, calledCount - 1);
   }
-  // Save current contact state before jumping
-  if(hasCalledCurrent && currentIndex < contacts.length) {
-    contacts[currentIndex].status = 'done';
-    contacts[currentIndex].outcome = currentOutcome || '';
-    updateRowStatus(currentIndex, 'done');
-    if(!currentOutcome) calledCount++;
-  } else if(currentIndex < contacts.length && contacts[currentIndex].status === 'current') {
+
+  // Freeze current contact back to pending so we return to it later
+  if(currentIndex < contacts.length && contacts[currentIndex].status === 'current') {
     contacts[currentIndex].status = 'pending';
     updateRowStatus(currentIndex, 'pending');
   }
+
+  // Count how many pending rows are being jumped over
+  var gapCount = 0;
+  var minGap = currentIndex < i ? currentIndex : 0;
+  for(var k = minGap; k < i; k++) {
+    if(contacts[k].status === 'pending') gapCount++;
+  }
+
   currentIndex = i;
   updateStats();
   showContact(i);
+
+  // Inform rep that skipped rows will be auto-returned to
+  if(gapCount > 0) {
+    showToast('↗ Jumped to #'+(i+1)+' · '+gapCount+' pending row'+(gapCount>1?'s':'')+' will auto-fill after');
+  }
   markDirty(); autoSaveSession();
 };
 function updateRowStatus(i, s) {
@@ -1680,7 +1694,10 @@ function showContact(i) {
   hasCalledCurrent = false; currentOutcome = '';
   document.getElementById('btnNext').disabled = true;
   ['interested','callback','noanswer','notinterested'].forEach(function(o){ document.getElementById('oc-'+o).className='outcome-btn'; });
-  if(i >= contacts.length){ allDone(); return; }
+  // Check if ALL contacts are done/skipped — scan entire array, not just by index
+  if(i >= contacts.length) { allDone(); return; }
+  var anyPending = contacts.some(function(c){ return c.status === 'pending'; });
+  if(!anyPending){ allDone(); return; }
   var c = contacts[i]; c.status = 'current'; updateRowStatus(i,'current');
   document.getElementById('currentNumber').textContent = '+91 '+c.number;
   document.getElementById('currentName').textContent = c.name||'Unknown Contact';
@@ -1712,24 +1729,49 @@ window.nextContact = function() {
   updateRowStatus(currentIndex,'done');
   var cell = document.getElementById('oc-cell-'+currentIndex);
   if(cell){ var L={interested:'🟢 Interested',callback:'🔔 Callback',noanswer:'📵 No Answer',notinterested:'🔴 Not Interested','':'—'}; cell.textContent=L[currentOutcome]||'—'; }
-  calledCount++; currentIndex++; updateStats(); showContact(currentIndex);
-  markDirty(); autoSaveSession(); // 💾 only writes if state changed
+  calledCount++;
+  currentIndex = findNextPending();
+  updateStats(); showContact(currentIndex);
+  markDirty(); autoSaveSession();
 };
+
 window.skipContact = function() {
   contacts[currentIndex].status='skipped'; contacts[currentIndex].outcome='skipped';
-  updateRowStatus(currentIndex,'skipped'); skippedCount++; currentIndex++; updateStats(); showContact(currentIndex);
-  markDirty(); autoSaveSession(); // 💾 only writes if state changed
+  updateRowStatus(currentIndex,'skipped'); skippedCount++;
+  currentIndex = findNextPending();
+  updateStats(); showContact(currentIndex);
+  markDirty(); autoSaveSession();
 };
+
+// Always find the next uncalled row scanning the ENTIRE array from the start
+// This guarantees no row is ever left behind regardless of jump order
+function findNextPending() {
+  // Priority 1: first pending row AFTER current position (natural forward flow)
+  for(var i = currentIndex + 1; i < contacts.length; i++) {
+    if(contacts[i].status === 'pending') return i;
+  }
+  // Priority 2: any pending row BEFORE current position (rows skipped over by jumps)
+  for(var j = 0; j < currentIndex; j++) {
+    if(contacts[j].status === 'pending') {
+      showToast('↩ Returning to skipped row #'+(j+1));
+      return j;
+    }
+  }
+  // No pending rows anywhere — all done
+  return contacts.length; // triggers allDone()
+}
 function updateStats() {
+  var pending = contacts.filter(function(c){ return c.status==='pending'||c.status==='current'; }).length;
   document.getElementById('statTotal').textContent=contacts.length;
   document.getElementById('statDone').textContent=calledCount;
   document.getElementById('statSkipped').textContent=skippedCount;
-  document.getElementById('statLeft').textContent=contacts.length-currentIndex;
+  document.getElementById('statLeft').textContent=pending;
 }
 function updateProgress() {
-  var p = contacts.length ? (currentIndex/contacts.length*100).toFixed(0) : 0;
+  var done = contacts.filter(function(c){ return c.status==='done'||c.status==='skipped'; }).length;
+  var p = contacts.length ? Math.round(done/contacts.length*100) : 0;
   document.getElementById('progressFill').style.width = p+'%';
-  document.getElementById('progressText').textContent = currentIndex+' / '+contacts.length;
+  document.getElementById('progressText').textContent = done+' / '+contacts.length;
 }
 function setStatus(type, text) {
   var pill = document.getElementById('statusPill');
@@ -1748,7 +1790,7 @@ function allDone() {
 }
 window.resetDialer = function() {
   contacts=[]; currentIndex=0; calledCount=0; skippedCount=0;
-  _activeSessionId = null; _isDirty = false; // clear session tracking
+  _activeSessionId = null; _isDirty = false; jumpReturnIndex = -1; // clear session tracking
   clearTimeout(_idleTimer);
   ['dialerPanel','statsBar','doneBanner','configBar'].forEach(function(id){ document.getElementById(id).style.display='none'; });
   document.getElementById('uploadZone').style.display='block';
