@@ -266,6 +266,10 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .queue-table tr.done td{opacity:.45}
 .queue-table tr.skipped td{opacity:.3;text-decoration:line-through}
 .row-status{display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 9px;border-radius:99px}
+.jump-btn{background:rgba(37,211,102,.06);border:1px solid rgba(37,211,102,.2);color:var(--green);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;font-family:'Syne',sans-serif}
+.jump-btn:hover{background:rgba(37,211,102,.18);transform:scale(1.08)}
+tr.done .jump-btn{opacity:.45}
+tr.current .jump-btn{display:none}
 .row-status.pending{background:rgba(90,122,90,.2);color:var(--muted)}
 .row-status.current{background:rgba(37,211,102,.15);color:var(--green)}
 .row-status.done{background:rgba(0,230,118,.1);color:var(--accent)}
@@ -486,21 +490,21 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 ══════════════════════════════════════════ -->
 <div id="landingScreen">
   <div class="landing-wrap">
-    <div class="landing-logo">📲</div>
-    <h1>Sales Dialer Agent</h1>
-    <p>Smart Calling Tool · Built for Sales Teams</p>
+    <div class="landing-logo" id="landingEmoji">📲</div>
+    <h1 id="landingH1">Sales Dialer Agent</h1>
+    <p id="landingTagline">Smart Calling Tool · Built for Sales Teams</p>
     <div class="role-cards">
       <div class="role-card user-card" onclick="showUserAuth()">
         <span class="role-badge">SALES REP</span>
         <div class="role-icon">👤</div>
-        <h3>User Login</h3>
-        <p>Sales reps login to access their dialer dashboard and call leads</p>
+        <h3 id="userCardTitle">User Login</h3>
+        <p id="userCardDesc">Sales reps login to access their dialer dashboard and call leads</p>
       </div>
       <div class="role-card admin-card" onclick="showAdminAuth()">
         <span class="role-badge">ADMIN</span>
         <div class="role-icon">🛡️</div>
-        <h3>Admin Panel</h3>
-        <p>Manage users, reset passwords, view call stats and team activity</p>
+        <h3 id="adminCardTitle">Admin Panel</h3>
+        <p id="adminCardDesc">Manage users, reset passwords, view call stats and team activity</p>
       </div>
     </div>
   </div>
@@ -517,8 +521,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div id="userTabsWrap">
       <div class="auth-logo-wrap user">
         <span class="icon">👤</span>
-        <h2>Sales Rep Portal</h2>
-        <p>Login or create your account</p>
+        <h2 id="userAuthTitle">Sales Rep Portal</h2>
+        <p id="userAuthSub">Login or create your account</p>
       </div>
       <div class="auth-tabs">
         <div class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Login</div>
@@ -604,8 +608,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div class="auth-back" onclick="backToLanding()">← Back</div>
     <div class="auth-logo-wrap admin">
       <span class="icon">🛡️</span>
-      <h2>Admin Panel</h2>
-      <p>Authorised personnel only</p>
+      <h2 id="adminAuthTitle">Admin Panel</h2>
+      <p id="adminAuthSub">Authorised personnel only</p>
     </div>
     <div class="field-group">
       <label>🔑 Admin Username</label>
@@ -633,8 +637,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div class="admin-header">
       <div class="admin-logo">🛡️</div>
       <div>
-        <h1>Admin Dashboard</h1>
-        <p>User Management · Sales Dialer System</p>
+        <h1 id="adminDashH1">Admin Dashboard</h1>
+        <p id="adminDashSub">User Management · Sales Dialer System</p>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span id="superAdminBadge" style="display:none;background:rgba(255,171,64,.15);color:var(--warn);border:1px solid rgba(255,171,64,.4);border-radius:99px;padding:4px 12px;font-size:10px;font-weight:700;letter-spacing:.5px">⚡ SUPER ADMIN</span>
@@ -684,10 +688,10 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div id="appContainer">
   <div class="container">
     <div class="header">
-      <div class="logo">📲</div>
+      <div class="logo" id="appLogoEmoji">📲</div>
       <div class="header-text">
-        <h1>WhatsApp Sales Dialer</h1>
-        <p>Rapid Call Agent · Built for Sales Teams</p>
+        <h1 id="appHeaderH1">WhatsApp Sales Dialer</h1>
+        <p id="appHeaderSub">Rapid Call Agent · Built for Sales Teams</p>
       </div>
       <div class="header-right">
         <div class="status-pill idle" id="statusPill">
@@ -699,14 +703,20 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
           <span id="userChipName">User</span>
         </div>
         <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">🌙</button>
-        <button class="icon-btn" onclick="appLogout()" title="Logout" style="font-size:14px">🚪</button>
+        <button class="icon-btn" onclick="appLogout()" title="Sign Out" style="font-size:14px">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+</button>
       </div>
     </div>
 
     <div id="uploadZone">
       <div class="upload-icon">📊</div>
-      <h2>Drop your lead Excel file here</h2>
-      <p>Upload the spreadsheet with your customer mobile numbers</p>
+      <h2 id="uploadZoneH2">Drop your lead Excel file here</h2>
+      <p id="uploadZoneSub">Upload the spreadsheet with your customer mobile numbers</p>
       <button class="btn-upload" onclick="document.getElementById('fileInput').click()">📁 Choose File</button>
       <div class="supported">Supports .xlsx · .xls · .csv</div>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
@@ -788,12 +798,12 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
       </div>
       <div class="queue-scroll">
         <table class="queue-table">
-          <thead><tr><th>#</th><th>Mobile</th><th>Name</th><th>Outcome</th><th>Status</th></tr></thead>
+          <thead><tr><th>#</th><th>Mobile</th><th>Name</th><th>Outcome</th><th>Status</th><th style="width:60px">Jump</th></tr></thead>
           <tbody id="queueBody"></tbody>
         </table>
       </div>
     </div>
-    <div class="note">🔒 All call data stays in your browser · Secured by Supabase Auth · Works on desktop &amp; mobile</div>
+    <div class="note" id="footerNote">🔒 All call data stays in your browser · Secured by Supabase Auth · Works on desktop &amp; mobile</div>
   </div>
 </div>
 
@@ -878,15 +888,110 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     RESUME SESSION MODAL
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="resumeModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <span>💾</span>
+      <h3>Resume Previous Session?</h3>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Last Session Progress</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="resumeStats"></div>
+      </div>
+      <div id="resumeDetails" style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:4px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="discardSession()">🗑 Start Fresh</button>
+      <button class="btn btn-confirm" onclick="resumeSession()">▶ Resume from where I left</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════════════════════
 //  CONFIGURATION
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+//  APP CONFIG — Edit everything here for each client
+//  All titles, subtitles, labels and branding live here.
+//  You never need to hunt through the HTML/JS to rebrand.
+// ════════════════════════════════════════════════════════
+const APP_CONFIG = {
+  // ── Branding ──────────────────────────────────────────
+  appName:        'Sales Dialer Agent',         // Main app title (header + tab)
+  appSubtitle:    'Rapid Call Agent · Built for Sales Teams', // Header subtitle
+  appEmoji:       '📲',                         // Logo emoji
+  landingTitle:   'Sales Dialer Agent',          // Landing screen H1
+  landingTagline: 'Smart Calling Tool · Built for Sales Teams', // Landing tagline
+  appMetaDesc:    'WhatsApp Sales Dialer — Smart calling tool for Indian sales teams',
+
+  // ── User Auth Screen ──────────────────────────────────
+  userAuthTitle:  'User Login',                 // Auth screen heading
+  userAuthSub:    'Sales Rep Access · Powered by Supabase',
+
+  // ── Admin Auth Screen ─────────────────────────────────
+  adminAuthTitle: 'Admin Panel',
+  adminAuthSub:   'Team Management · Restricted Access',
+  adminDashTitle: 'Admin Dashboard',
+  adminDashSub:   'User Management · Sales Dialer System',
+
+  // ── Dialer Labels ─────────────────────────────────────
+  dialerTitle:    'WhatsApp Sales Dialer',      // In-app header H1
+  uploadTitle:    'Drop your lead Excel file here',
+  uploadSubtitle: 'Upload the spreadsheet with your customer mobile numbers',
+  sessionDoneTitle: 'Session Complete!',
+  footerNote:     '🔒 All call data stays in your browser · Secured by Supabase Auth · Works on desktop & mobile',
+
+  // ── Role Cards ────────────────────────────────────────
+  userCardTitle:  'User Login',
+  userCardDesc:   'Sales reps login to access their dialer dashboard and call leads',
+  adminCardTitle: 'Admin Panel',
+  adminCardDesc:  'Manage users, reset passwords, view call stats and team activity',
+};
+
+// Apply config to all DOM elements that reference it
+function applyAppConfig() {
+  var C = APP_CONFIG;
+  // Page title
+  document.title = C.appName + ' — Sales Dialer';
+  // Landing
+  var lh = document.getElementById('landingH1');     if(lh)  lh.textContent = C.landingTitle;
+  var lt = document.getElementById('landingTagline'); if(lt)  lt.textContent = C.landingTagline;
+  var li = document.getElementById('landingEmoji');   if(li)  li.textContent = C.appEmoji;
+  // Role cards
+  var uc = document.getElementById('userCardTitle');  if(uc)  uc.textContent = C.userCardTitle;
+  var ud = document.getElementById('userCardDesc');   if(ud)  ud.textContent = C.userCardDesc;
+  var ac = document.getElementById('adminCardTitle'); if(ac)  ac.textContent = C.adminCardTitle;
+  var ad = document.getElementById('adminCardDesc');  if(ad)  ad.textContent = C.adminCardDesc;
+  // User auth
+  var uat = document.getElementById('userAuthTitle'); if(uat) uat.textContent = C.userAuthTitle;
+  var uas = document.getElementById('userAuthSub');   if(uas) uas.textContent = C.userAuthSub;
+  // Admin auth
+  var aat = document.getElementById('adminAuthTitle'); if(aat) aat.textContent = C.adminAuthTitle;
+  var aas = document.getElementById('adminAuthSub');   if(aas) aas.textContent = C.adminAuthSub;
+  // Admin dashboard
+  var adh = document.getElementById('adminDashH1');   if(adh) adh.textContent = C.adminDashTitle;
+  var ads = document.getElementById('adminDashSub');   if(ads) ads.textContent = C.adminDashSub;
+  // App header
+  var ah1 = document.getElementById('appHeaderH1');   if(ah1) ah1.textContent = C.dialerTitle;
+  var ah2 = document.getElementById('appHeaderSub');  if(ah2) ah2.textContent = C.appSubtitle;
+  var al  = document.getElementById('appLogoEmoji');  if(al)  al.textContent = C.appEmoji;
+  // Upload zone
+  var uzh = document.getElementById('uploadZoneH2');  if(uzh) uzh.textContent = C.uploadTitle;
+  var uzp = document.getElementById('uploadZoneSub'); if(uzp) uzp.textContent = C.uploadSubtitle;
+  // Footer
+  var fn  = document.getElementById('footerNote');    if(fn)  fn.innerHTML = C.footerNote;
+}
+
 const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
 const ADMIN_USER    = 'admin';
-const ADMIN_PASS    = 'Admin@123';   // ← Client manager gets this
-const SUPER_PASS    = 'Addys@888333'; // ← Only YOU know this — change it!
+const ADMIN_PASS    = 'Addys@270893';   // ← Client manager gets this
+const SUPER_PASS    = 'SuprAdmin@9999'; // ← Only YOU know this — change it!
 var isSuperAdmin = false; // true only when logged in with SUPER_PASS
 
 // ════════════════════════════════════════════════════════
@@ -1229,8 +1334,9 @@ function enterApp() {
   document.getElementById('userAuthScreen').classList.remove('visible');
   document.getElementById('landingScreen').style.display = 'none';
   document.getElementById('appContainer').style.display = 'block';
-  // Check subscription validity from DB
   checkSubscription();
+  // Check for any unfinished session to resume
+  setTimeout(function(){ checkForActiveSession(); }, 800);
 }
 
 // ── SUBSCRIPTION CHECK ──
@@ -1530,10 +1636,33 @@ function buildTable() {
       '<td class="mono">+91 '+c.number+'</td>'+
       '<td>'+(c.name||'<span style="color:var(--muted)">—</span>')+'</td>'+
       '<td id="oc-cell-'+i+'" style="color:var(--muted);font-size:11px">—</td>'+
-      '<td><span class="row-status pending" id="status-'+i+'">● Pending</span></td>';
+      '<td><span class="row-status pending" id="status-'+i+'">● Pending</span></td>'+
+      '<td id="jump-cell-'+i+'"><button class="jump-btn" onclick="jumpToContact('+i+')" title="Jump to this contact">↗</button></td>';
     body.appendChild(tr);
   });
 }
+
+// Jump to any contact in the queue freely
+window.jumpToContact = function(i) {
+  if(i === currentIndex) return; // already here
+  if(contacts[i].status === 'done') {
+    if(!confirm('This contact is already marked as called. Jump to it anyway?')) return;
+  }
+  // Save current contact state before jumping
+  if(hasCalledCurrent && currentIndex < contacts.length) {
+    contacts[currentIndex].status = 'done';
+    contacts[currentIndex].outcome = currentOutcome || '';
+    updateRowStatus(currentIndex, 'done');
+    if(!currentOutcome) calledCount++;
+  } else if(currentIndex < contacts.length && contacts[currentIndex].status === 'current') {
+    contacts[currentIndex].status = 'pending';
+    updateRowStatus(currentIndex, 'pending');
+  }
+  currentIndex = i;
+  updateStats();
+  showContact(i);
+  markDirty(); autoSaveSession();
+};
 function updateRowStatus(i, s) {
   var row = document.getElementById('row-'+i);
   var badge = document.getElementById('status-'+i);
@@ -1542,6 +1671,9 @@ function updateRowStatus(i, s) {
   var L = {current:'◉ Current', done:'✓ Called', skipped:'↷ Skipped', pending:'● Pending'};
   badge.className = 'row-status '+s;
   badge.textContent = L[s]||s;
+  // Show jump button for pending/skipped, hide for current (already there)
+  var jbtn = document.getElementById('jump-cell-'+i);
+  if(jbtn) jbtn.style.display = (s === 'current') ? 'none' : '';
   if(s==='current') setTimeout(function(){ row.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 100);
 }
 function showContact(i) {
@@ -1566,6 +1698,7 @@ window.markCalled = function() {
   document.getElementById('avEl').classList.add('calling');
   document.getElementById('btnNext').disabled = false;
   setTimeout(function(){ document.getElementById('avEl').classList.remove('calling'); }, 4000);
+  markDirty(); // rep is active — reset idle clock
 };
 window.setOutcome = function(o) {
   currentOutcome = o;
@@ -1580,10 +1713,12 @@ window.nextContact = function() {
   var cell = document.getElementById('oc-cell-'+currentIndex);
   if(cell){ var L={interested:'🟢 Interested',callback:'🔔 Callback',noanswer:'📵 No Answer',notinterested:'🔴 Not Interested','':'—'}; cell.textContent=L[currentOutcome]||'—'; }
   calledCount++; currentIndex++; updateStats(); showContact(currentIndex);
+  markDirty(); autoSaveSession(); // 💾 only writes if state changed
 };
 window.skipContact = function() {
   contacts[currentIndex].status='skipped'; contacts[currentIndex].outcome='skipped';
   updateRowStatus(currentIndex,'skipped'); skippedCount++; currentIndex++; updateStats(); showContact(currentIndex);
+  markDirty(); autoSaveSession(); // 💾 only writes if state changed
 };
 function updateStats() {
   document.getElementById('statTotal').textContent=contacts.length;
@@ -1609,14 +1744,230 @@ function allDone() {
   document.getElementById('doneSummary').textContent =
     'Called: '+calledCount+' · Skipped: '+skippedCount+' · Interested: '+(oc.interested||0)+' · Callbacks: '+(oc.callback||0);
   setStatus('idle','✓ Complete'); updateProgress();
+  completeSession(); // 💾 mark session as fully complete in DB
 }
 window.resetDialer = function() {
   contacts=[]; currentIndex=0; calledCount=0; skippedCount=0;
+  _activeSessionId = null; _isDirty = false; // clear session tracking
+  clearTimeout(_idleTimer);
   ['dialerPanel','statsBar','doneBanner','configBar'].forEach(function(id){ document.getElementById(id).style.display='none'; });
   document.getElementById('uploadZone').style.display='block';
   var fi=document.getElementById('fileInput'); if(fi) fi.value='';
   setStatus('idle','Idle');
 };
+
+// ════════════════════════════════════════════════════════
+//  SESSION AUTO-SAVE & RESUME
+// ════════════════════════════════════════════════════════
+var _activeSessionId = null;
+var _isDirty = false;          // true only when state changed since last save
+var _isSaving = false;         // prevent concurrent writes
+var _idleTimer = null;         // detects idle screen
+var _IDLE_LIMIT = 5 * 60 * 1000; // 5 minutes idle = stop saving
+
+// Called on every user action — resets idle clock and marks data as changed
+function markDirty() {
+  _isDirty = true;
+  clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(function(){
+    // Rep has been idle 5 min — clear dirty flag, stop any pending save
+    _isDirty = false;
+    console.log('Session idle — auto-save paused');
+  }, _IDLE_LIMIT);
+}
+
+// Write to Supabase ONLY if something actually changed and rep is active
+async function autoSaveSession() {
+  if(!currentUser || !_sb || !contacts.length) return;
+  if(!_isDirty) return;          // nothing changed — skip write entirely
+  if(_isSaving) return;          // already writing — don't stack requests
+  _isDirty = false;              // clear flag before async write (reset if error)
+  _isSaving = true;
+  try {
+    var payload = {
+      user_id:       currentUser.id,
+      session_date:  new Date().toISOString().split('T')[0],
+      contacts:      contacts,
+      current_index: currentIndex,
+      called_count:  calledCount,
+      skipped_count: skippedCount,
+      status:        'active',
+      updated_at:    new Date().toISOString()
+    };
+    if(_activeSessionId) {
+      var r = await _sb.from('call_sessions').update(payload).eq('id', _activeSessionId);
+      if(r.error) throw r.error;
+    } else {
+      var res = await _sb.from('call_sessions').insert(payload).select('id').single();
+      if(res.error) throw res.error;
+      if(res.data) _activeSessionId = res.data.id;
+    }
+    console.log('Session saved ✓ index:', currentIndex);
+  } catch(e) {
+    _isDirty = true; // restore dirty so next action retries
+    console.warn('Auto-save failed (will retry):', e.message);
+  }
+  _isSaving = false;
+}
+
+// Mark session as completed in DB
+async function completeSession() {
+  if(!_activeSessionId || !_sb) return;
+  try {
+    await _sb.from('call_sessions')
+      .update({ status: 'completed', updated_at: new Date().toISOString() })
+      .eq('id', _activeSessionId);
+    _activeSessionId = null;
+  } catch(e) { console.warn('Complete session save:', e.message); }
+}
+
+// Check on login if there is an unfinished active session today
+async function checkForActiveSession() {
+  if(!currentUser || !_sb) return;
+  try {
+    // Silently clean up completed/discarded sessions older than 30 days
+    var cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+    _sb.from('call_sessions')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .in('status', ['completed','discarded'])
+      .lt('updated_at', cutoff)
+      .then(function(){}) // fire-and-forget, don't await
+      .catch(function(){});
+
+    var today = new Date().toISOString().split('T')[0];
+    var res = await _sb.from('call_sessions')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if(res.error || !res.data || !res.data.length) return;
+    var session = res.data[0];
+    if(!session.contacts || !session.contacts.length) return;
+    // Show resume modal
+    _activeSessionId = session.id;
+    showResumeModal(session);
+  } catch(e) { console.warn('Session check (non-fatal):', e.message); }
+}
+
+function showResumeModal(session) {
+  var called  = session.called_count || 0;
+  var skipped = session.skipped_count || 0;
+  var total   = session.contacts ? session.contacts.length : 0;
+  var remaining = total - (session.current_index || 0);
+  var savedDate = session.updated_at ? new Date(session.updated_at) : new Date();
+  var timeAgo = getTimeAgo(savedDate);
+
+  // Fill stats grid
+  var statsHtml =
+    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;text-align:center">' +
+      '<div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:var(--accent)">'+total+'</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:2px">Total Leads</div>' +
+    '</div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;text-align:center">' +
+      '<div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:var(--green)">'+called+'</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:2px">Already Called</div>' +
+    '</div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;text-align:center">' +
+      '<div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:var(--warn)">'+skipped+'</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:2px">Skipped</div>' +
+    '</div>' +
+    '<div style="background:var(--surface);border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:12px;text-align:center">' +
+      '<div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:var(--accent)">'+remaining+'</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:2px">Remaining</div>' +
+    '</div>';
+
+  document.getElementById('resumeStats').innerHTML = statsHtml;
+  document.getElementById('resumeDetails').innerHTML =
+    '📅 Session saved <strong style="color:var(--text)">'+timeAgo+'</strong><br>' +
+    '▶ Resuming will start you from lead <strong style="color:var(--accent)">#'+(session.current_index+1)+'</strong> — ' +
+    'all '+ called +' previously called leads are preserved with their outcomes.<br>' +
+    '<span style="color:var(--danger)">🗑 Start Fresh</span> will discard this session and let you upload a new file.';
+
+  document.getElementById('resumeModal').classList.add('open');
+}
+
+function getTimeAgo(date) {
+  var mins = Math.round((Date.now() - date.getTime()) / 60000);
+  if(mins < 2)   return 'just now';
+  if(mins < 60)  return mins + ' minutes ago';
+  var hrs = Math.round(mins / 60);
+  if(hrs < 24)   return hrs + ' hour' + (hrs > 1 ? 's' : '') + ' ago';
+  var days = Math.round(hrs / 24);
+  return days + ' day' + (days > 1 ? 's' : '') + ' ago';
+}
+
+window.resumeSession = async function() {
+  document.getElementById('resumeModal').classList.remove('open');
+  if(!_sb || !_activeSessionId) return;
+  try {
+    var res = await _sb.from('call_sessions').select('*').eq('id', _activeSessionId).single();
+    if(res.error || !res.data) return;
+    var session = res.data;
+
+    // Restore all state
+    contacts      = session.contacts;
+    currentIndex  = session.current_index || 0;
+    calledCount   = session.called_count  || 0;
+    skippedCount  = session.skipped_count || 0;
+
+    // Show dialer UI
+    document.getElementById('uploadZone').style.display  = 'none';
+    document.getElementById('statsBar').style.display    = 'grid';
+    document.getElementById('dialerPanel').style.display = 'block';
+
+    // Rebuild the full table with all prior statuses restored
+    buildTable();
+
+    // Restore done/skipped rows in the table
+    contacts.forEach(function(c, i) {
+      if(c.status === 'done' || c.status === 'skipped') {
+        updateRowStatus(i, c.status);
+        var cell = document.getElementById('oc-cell-'+i);
+        if(cell && c.outcome) {
+          var L = {interested:'🟢 Interested', callback:'🔔 Callback', noanswer:'📵 No Answer', notinterested:'🔴 Not Interested', skipped:'↷ Skipped', '':'—'};
+          cell.textContent = L[c.outcome] || '—';
+        }
+      }
+    });
+
+    updateStats(); showContact(currentIndex);
+    setStatus('active', '▶ Resumed');
+
+    // Toast confirmation
+    showToast('✅ Session resumed — starting from lead #'+(currentIndex+1));
+  } catch(e) {
+    showToast('❌ Could not restore session: ' + e.message, true);
+  }
+};
+
+window.discardSession = async function() {
+  document.getElementById('resumeModal').classList.remove('open');
+  if(_activeSessionId && _sb) {
+    try {
+      await _sb.from('call_sessions').update({ status: 'discarded' }).eq('id', _activeSessionId);
+    } catch(e) {}
+    _activeSessionId = null;
+  }
+};
+
+// Toast notification helper
+function showToast(msg, isError) {
+  var t = document.getElementById('appToast');
+  if(!t) {
+    t = document.createElement('div');
+    t.id = 'appToast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:30px;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;z-index:99999;transition:opacity .4s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    document.body.appendChild(t);
+  }
+  t.style.background = isError ? '#ff5252' : '#25D366';
+  t.style.color = isError ? '#fff' : '#000';
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){ t.style.opacity = '0'; }, 3500);
+}
 
 // ════════════════════════════════════════════════════════
 //  TEMPLATES
@@ -1857,6 +2208,9 @@ window.sendEmailReport = function() {
 //  PWA — MANIFEST + SERVICE WORKER
 // ════════════════════════════════════════════════════════
 
+// Apply branding config to all DOM elements
+document.addEventListener('DOMContentLoaded', function(){ applyAppConfig(); });
+
 // Inject manifest dynamically (works from any host including GitHub Pages)
 (function() {
   var manifest = {
@@ -1933,7 +2287,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
     deferredInstallPrompt.userChoice.then(function(){ banner.remove(); });
   };
   document.body.appendChild(banner);
-  // Auto-hide after 8 secondsxss
+  // Auto-hide after 8 seconds
   setTimeout(function(){ if(banner.parentNode) banner.remove(); }, 8000);
 });
 </script>
