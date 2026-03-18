@@ -1671,13 +1671,22 @@ function updateAdminStats(total, active, suspended, pending) {
 
 // ── MAX REPS — load from Supabase app_config table ──
 async function loadMaxReps() {
-  if(!_sb) return;
+  // Priority 1: Supabase app_config table (synced across all devices)
+  if(_sb) {
+    try {
+      var res = await _sb.from('app_config').select('value').eq('key','max_reps').single();
+      if(!res.error && res.data && res.data.value) {
+        MAX_REPS = parseInt(res.data.value) || 10;
+        return; // Cloud value found — use it
+      }
+    } catch(e) { /* table may not exist yet — fall through */ }
+  }
+  // Priority 2: localStorage override (set by Super Admin via Save limit button)
   try {
-    var res = await _sb.from('app_config').select('value').eq('key','max_reps').single();
-    if(!res.error && res.data && res.data.value) {
-      MAX_REPS = parseInt(res.data.value) || 10;
-    }
-  } catch(e) { /* table may not exist yet — use default */ }
+    var local = localStorage.getItem('max_reps_override');
+    if(local) { MAX_REPS = parseInt(local) || 10; }
+  } catch(le) {}
+  // Priority 3: falls back to MAX_REPS constant in code (default 10)
 }
 
 // ── MAX REPS — save (Super Admin only) ──
@@ -1686,20 +1695,43 @@ window.saveMaxReps = async function() {
   var inp = document.getElementById('maxRepsInput');
   var val = parseInt(inp && inp.value);
   if(!val || val < 1) return showToast('❌ Enter a valid number');
+
+  // Warn if setting limit below current registered count
   try {
-    // Get current user count first
     var countRes = await _sb.from('user_profiles').select('id', { count: 'exact', head: true });
     var currentCount = countRes.count || 0;
     if(val < currentCount) {
       if(!confirm('⚠️ You have ' + currentCount + ' registered reps but are setting limit to ' + val + '. New registrations will be blocked. Continue?')) return;
     }
-    // Upsert into app_config table
-    var res = await _sb.from('app_config').upsert({ key: 'max_reps', value: String(val) }, { onConflict: 'key' });
-    if(res.error) throw res.error;
-    MAX_REPS = val;
-    showToast('✅ Rep limit updated to ' + val);
-    loadUsers(); // Refresh to recolour the slot card
-  } catch(e) { showToast('❌ Failed to save: ' + e.message); }
+  } catch(ce) { /* non-fatal — proceed anyway */ }
+
+  // ── Try saving to Supabase app_config table first ──
+  var savedToCloud = false;
+  try {
+    var res = await _sb.from('app_config').upsert(
+      { key: 'max_reps', value: String(val) },
+      { onConflict: 'key' }
+    );
+    if(!res.error) savedToCloud = true;
+    else console.warn('app_config upsert error:', res.error.message);
+  } catch(e) {
+    console.warn('app_config upsert exception:', e.message);
+  }
+
+  // ── Always save to localStorage as backup ──
+  // This ensures the limit persists even if Supabase table/policy is not set up
+  try { localStorage.setItem('max_reps_override', String(val)); } catch(le) {}
+
+  // Update in-memory value immediately regardless
+  MAX_REPS = val;
+
+  if(savedToCloud) {
+    showToast('✅ Rep limit saved to ' + val + ' (synced to cloud)');
+  } else {
+    showToast('✅ Rep limit set to ' + val + ' (saved locally — run Script 3 in Supabase to sync across devices)');
+  }
+
+  loadUsers(); // Refresh slot card colours
 };
 
 window.adminResetPw = async function(email) {
