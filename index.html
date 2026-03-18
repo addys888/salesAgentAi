@@ -647,11 +647,20 @@ tr.current .jump-btn{display:none}
       </div>
     </div>
 
-    <div class="admin-stats">
+    <div class="admin-stats" style="grid-template-columns:repeat(5,1fr)">
       <div class="astat"><div class="val" id="aStatTotal">—</div><div class="lbl">Total Users</div></div>
       <div class="astat"><div class="val" id="aStatActive" style="color:var(--green)">—</div><div class="lbl">Active</div></div>
       <div class="astat"><div class="val" id="aStatSuspended" style="color:var(--danger)">—</div><div class="lbl">Suspended</div></div>
       <div class="astat"><div class="val" id="aStatPending" style="color:var(--warn)">—</div><div class="lbl">Pending</div></div>
+      <div class="astat" id="aStatSlotsCard" style="border-color:var(--border2)">
+        <div class="val" id="aStatSlots" style="color:var(--green)">—</div>
+        <div class="lbl">Slots Used</div>
+        <div id="aStatSlotsMax" style="font-size:9px;color:var(--muted);margin-top:2px">of — max</div>
+        <div id="superAdminSlotInput" style="display:none;margin-top:6px">
+          <input type="number" id="maxRepsInput" min="1" max="500" style="width:60px;background:var(--input-bg);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:5px;font-size:10px;text-align:center" title="Max reps allowed">
+          <button onclick="saveMaxReps()" style="margin-top:4px;padding:2px 8px;background:rgba(168,85,247,.2);color:var(--purple);border:1px solid var(--purple);border-radius:5px;font-size:9px;cursor:pointer;width:100%">Save limit</button>
+        </div>
+      </div>
     </div>
 
     <div class="admin-panel-card">
@@ -1022,7 +1031,8 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const ADMIN_USER    = 'admin';
 const ADMIN_PASS    = 'Addys@270893';   // ← Client manager gets this
 const SUPER_PASS    = 'SuprAdmin@9999'; // ← Only YOU know this — change it!
-var isSuperAdmin = false; // true only when logged in with SUPER_PASS
+var MAX_REPS        = 10;              // ← Max reps allowed to register for this client
+var isSuperAdmin    = false;           // true only when logged in with SUPER_PASS
 
 // ════════════════════════════════════════════════════════
 //  SUPABASE INIT
@@ -1233,8 +1243,20 @@ window.userRegister = async function() {
     var sb = _sb;
     if(!sb) throw new Error('Auth service not ready. Please refresh and try again.');
 
-    // Use admin-style signup that bypasses email confirmation
-    // by passing emailRedirectTo as empty and using signInWithPassword flow
+    // ── Enforce MAX_REPS limit before allowing registration ──
+    try {
+      var countRes = await sb.from('user_profiles').select('id', { count: 'exact', head: true });
+      var currentCount = countRes.count || 0;
+      if(currentCount >= MAX_REPS) {
+        showMsg('registerMsg',
+          '❌ Registration is currently closed. This team has reached the maximum of ' +
+          MAX_REPS + ' reps allowed on this plan. Please contact your administrator.'
+        );
+        btn.disabled = false; btn.textContent = 'Create Account →';
+        return;
+      }
+    } catch(ce) { console.warn('Slot count check (non-fatal):', ce); }
+
     // Attempt signup
     var res = await sb.auth.signUp({
       email: email,
@@ -1535,7 +1557,7 @@ window.adminLogin = function() {
     // Show/hide super admin badge in header
     var badge = document.getElementById('superAdminBadge');
     if(badge) badge.style.display = isSuperAdmin ? 'inline-flex' : 'none';
-    window.loadUsers();
+    loadMaxReps().then(function(){ window.loadUsers(); });
   } else {
     showMsg('adminMsg','❌ Invalid admin credentials');
     document.getElementById('adminPass').value = '';
@@ -1615,7 +1637,70 @@ function updateAdminStats(total, active, suspended, pending) {
   document.getElementById('aStatActive').textContent = active;
   document.getElementById('aStatSuspended').textContent = suspended;
   document.getElementById('aStatPending').textContent = pending;
+  // Slots card
+  var slotsEl   = document.getElementById('aStatSlots');
+  var slotMaxEl = document.getElementById('aStatSlotsMax');
+  var slotCard  = document.getElementById('aStatSlotsCard');
+  if(!slotsEl) return;
+  var used = total; // every registered user counts toward the slot
+  slotsEl.textContent = used;
+  slotMaxEl.textContent = 'of ' + MAX_REPS + ' max';
+  // Colour coding: green < 80%, amber 80-99%, red at/over limit
+  var pct = MAX_REPS > 0 ? (used / MAX_REPS) : 1;
+  if(pct >= 1) {
+    slotsEl.style.color = 'var(--danger)';
+    slotCard.style.borderColor = 'rgba(255,82,82,.5)';
+    slotMaxEl.textContent = '🔴 LIMIT REACHED · ' + used + '/' + MAX_REPS;
+  } else if(pct >= 0.8) {
+    slotsEl.style.color = 'var(--warn)';
+    slotCard.style.borderColor = 'rgba(255,171,64,.4)';
+    slotMaxEl.textContent = '🟡 ' + (MAX_REPS - used) + ' slot(s) left · max ' + MAX_REPS;
+  } else {
+    slotsEl.style.color = 'var(--green)';
+    slotCard.style.borderColor = 'var(--border2)';
+    slotMaxEl.textContent = (MAX_REPS - used) + ' slots free · max ' + MAX_REPS;
+  }
+  // Show edit input only for Super Admin
+  var inp = document.getElementById('superAdminSlotInput');
+  if(inp) {
+    inp.style.display = isSuperAdmin ? 'block' : 'none';
+    var mi = document.getElementById('maxRepsInput');
+    if(mi) mi.value = MAX_REPS;
+  }
 }
+
+// ── MAX REPS — load from Supabase app_config table ──
+async function loadMaxReps() {
+  if(!_sb) return;
+  try {
+    var res = await _sb.from('app_config').select('value').eq('key','max_reps').single();
+    if(!res.error && res.data && res.data.value) {
+      MAX_REPS = parseInt(res.data.value) || 10;
+    }
+  } catch(e) { /* table may not exist yet — use default */ }
+}
+
+// ── MAX REPS — save (Super Admin only) ──
+window.saveMaxReps = async function() {
+  if(!isSuperAdmin) return;
+  var inp = document.getElementById('maxRepsInput');
+  var val = parseInt(inp && inp.value);
+  if(!val || val < 1) return showToast('❌ Enter a valid number');
+  try {
+    // Get current user count first
+    var countRes = await _sb.from('user_profiles').select('id', { count: 'exact', head: true });
+    var currentCount = countRes.count || 0;
+    if(val < currentCount) {
+      if(!confirm('⚠️ You have ' + currentCount + ' registered reps but are setting limit to ' + val + '. New registrations will be blocked. Continue?')) return;
+    }
+    // Upsert into app_config table
+    var res = await _sb.from('app_config').upsert({ key: 'max_reps', value: String(val) }, { onConflict: 'key' });
+    if(res.error) throw res.error;
+    MAX_REPS = val;
+    showToast('✅ Rep limit updated to ' + val);
+    loadUsers(); // Refresh to recolour the slot card
+  } catch(e) { showToast('❌ Failed to save: ' + e.message); }
+};
 
 window.adminResetPw = async function(email) {
   if(!email || !confirm('Send password reset email to '+email+'?')) return;
