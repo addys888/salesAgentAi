@@ -22,7 +22,7 @@
    THEME VARIABLES
 ═══════════════════════════════════════════════ */
 [data-theme="dark"]{
-  --green:#25D366;--green-dark:#128C7E;--accent:#0e1210;
+  --green:#25D366;--green-dark:#128C7E;--accent:#00e676;
   --bg:#0a0f0a;--surface:#111811;--surface2:#182018;--surface3:#1e281e;
   --border:#25D36622;--border2:#25D36640;--text:#e8f5e9;--muted:#5a7a5a;
   --danger:#ff5252;--warn:#ffab40;--info:#64b5f6;
@@ -1102,6 +1102,34 @@ window.addEventListener('DOMContentLoaded', async function() {
     var sessionRes = await _sb.auth.getSession();
     if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
       currentUser = sessionRes.data.session.user;
+      // ── Re-check suspension on every page load/refresh ──
+      // A suspended user with a cached session must be blocked here
+      try {
+        var profRes = await _sb.from('user_profiles')
+          .select('status, subscription_end')
+          .eq('id', currentUser.id)
+          .single();
+        if(!profRes.error && profRes.data) {
+          var p = profRes.data;
+          // Block if suspended
+          if(p.status === 'suspended') {
+            await _sb.auth.signOut();
+            currentUser = null;
+            return; // Stay on landing screen, don't enter app
+          }
+          // Block if subscription expired
+          if(p.subscription_end) {
+            var n = new Date(); n.setHours(0,0,0,0);
+            var se = new Date(p.subscription_end); se.setHours(0,0,0,0);
+            if(se < n) {
+              try { await _sb.from('user_profiles').update({ status: 'suspended' }).eq('id', currentUser.id); } catch(e){}
+              await _sb.auth.signOut();
+              currentUser = null;
+              return;
+            }
+          }
+        }
+      } catch(pe) { console.warn('Session status check (non-fatal):', pe); }
       enterApp();
     }
   } catch(e) { console.warn('Session check error:', e); }
@@ -1297,17 +1325,44 @@ window.userLogin = async function() {
     var res = await sb.auth.signInWithPassword({ email: email, password: pass });
     if(res.error) throw res.error;
     currentUser = res.data.user;
-    // Update profile on login (in case it wasn't saved on register)
+
+    // ── Check suspension BEFORE entering app ──
+    // Do NOT upsert status here — that would overwrite a suspended status set by admin
     try {
-      var meta = currentUser.user_metadata || {};
-      await sb.from('user_profiles').upsert({
-        id: currentUser.id,
-        full_name: meta.full_name || '',
-        email: currentUser.email,
-        phone_number: meta.phone_number || '',
-        status: 'active'
-      });
-    } catch(pe) { console.warn('Profile upsert (non-fatal):', pe); }
+      var profileCheck = await sb.from('user_profiles')
+        .select('status, full_name, subscription_end')
+        .eq('id', currentUser.id)
+        .single();
+
+      if(!profileCheck.error && profileCheck.data) {
+        var prof = profileCheck.data;
+
+        // Block suspended users immediately at login — before showing any UI
+        if(prof.status === 'suspended') {
+          await sb.auth.signOut();
+          currentUser = null;
+          showMsg('loginMsg','❌ Your account has been suspended. Please contact your administrator.');
+          btn.disabled = false; btn.textContent = 'Login →';
+          return;
+        }
+
+        // Check subscription expiry at login too
+        if(prof.subscription_end) {
+          var now = new Date(); now.setHours(0,0,0,0);
+          var subEnd = new Date(prof.subscription_end); subEnd.setHours(0,0,0,0);
+          if(subEnd < now) {
+            // Auto-suspend and block
+            try { await sb.from('user_profiles').update({ status: 'suspended' }).eq('id', currentUser.id); } catch(e){}
+            await sb.auth.signOut();
+            currentUser = null;
+            showMsg('loginMsg','❌ Your subscription expired on ' + subEnd.toLocaleDateString('en-IN') + '. Please contact your administrator to renew.');
+            btn.disabled = false; btn.textContent = 'Login →';
+            return;
+          }
+        }
+      }
+    } catch(pe) { console.warn('Profile check on login (non-fatal):', pe); }
+
     showMsg('loginMsg','✅ Welcome back! Loading...','success');
     setTimeout(function(){ enterApp(); }, 600);
   } catch(e) {
