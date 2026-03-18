@@ -1107,6 +1107,9 @@ window.addEventListener('DOMContentLoaded', async function() {
     return; // Don't proceed to normal session check
   }
 
+  // ── Load rep limit for everyone (needed for registration enforcement) ──
+  await loadMaxReps();
+
   // ── Normal session check ──
   try {
     var sessionRes = await _sb.auth.getSession();
@@ -1243,19 +1246,44 @@ window.userRegister = async function() {
     var sb = _sb;
     if(!sb) throw new Error('Auth service not ready. Please refresh and try again.');
 
-    // ── Enforce MAX_REPS limit before allowing registration ──
+    // ── Enforce MAX_REPS limit — FAIL CLOSED (block if uncertain) ──
+    // Re-fetch MAX_REPS fresh from Supabase right now — don't trust the cached value
+    await loadMaxReps();
+
+    var slotCheckPassed = false;
     try {
+      // Count ALL rows in user_profiles — every registered user consumes a slot
       var countRes = await sb.from('user_profiles').select('id', { count: 'exact', head: true });
-      var currentCount = countRes.count || 0;
-      if(currentCount >= MAX_REPS) {
+
+      if(countRes.error) {
+        // Cannot verify count — BLOCK registration (fail-closed for security)
         showMsg('registerMsg',
-          '❌ Registration is currently closed. This team has reached the maximum of ' +
-          MAX_REPS + ' reps allowed on this plan. Please contact your administrator.'
+          '❌ Unable to verify registration slots. Please try again in a moment or contact your administrator.'
         );
         btn.disabled = false; btn.textContent = 'Create Account →';
         return;
       }
-    } catch(ce) { console.warn('Slot count check (non-fatal):', ce); }
+
+      var currentCount = countRes.count || 0;
+      if(currentCount >= MAX_REPS) {
+        showMsg('registerMsg',
+          '❌ Registration is closed. This team has reached its maximum of ' +
+          MAX_REPS + ' rep' + (MAX_REPS === 1 ? '' : 's') +
+          '. Please contact your administrator to add more seats.'
+        );
+        btn.disabled = false; btn.textContent = 'Create Account →';
+        return;
+      }
+      slotCheckPassed = true;
+    } catch(ce) {
+      // Network error or RLS block — BLOCK registration (fail-closed)
+      console.error('Slot count check failed:', ce.message);
+      showMsg('registerMsg',
+        '❌ Registration check failed. Please refresh and try again, or contact your administrator.'
+      );
+      btn.disabled = false; btn.textContent = 'Create Account →';
+      return;
+    }
 
     // Attempt signup
     var res = await sb.auth.signUp({
