@@ -22,7 +22,7 @@
    THEME VARIABLES
 ═══════════════════════════════════════════════ */
 [data-theme="dark"]{
-  --green:#25D366;--green-dark:#128C7E;--accent:#00e676;
+  --green:#25D366;--green-dark:#128C7E;--accent:#0e1210;
   --bg:#0a0f0a;--surface:#111811;--surface2:#182018;--surface3:#1e281e;
   --border:#25D36622;--border2:#25D36640;--text:#e8f5e9;--muted:#5a7a5a;
   --danger:#ff5252;--warn:#ffab40;--info:#64b5f6;
@@ -1566,7 +1566,9 @@ window.adminResetPw = async function(email) {
   if(!email || !confirm('Send password reset email to '+email+'?')) return;
   try {
     var sb = _sb;
-    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    // Always redirect to the canonical GitHub Pages URL — never localhost or custom domain
+    var canonicalUrl = 'https://addys888.github.io/salesAgentAi/';
+    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: canonicalUrl });
     if(res.error) throw res.error;
     alert('✅ Password reset email sent to '+email);
   } catch(e) { alert('❌ Failed: '+e.message); }
