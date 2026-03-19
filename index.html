@@ -2368,7 +2368,31 @@ window.generateAISummary = async function() {
   var repN = getRepName();
   var intList = called.filter(function(c){ return c.outcome==='interested'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
   var cbList  = called.filter(function(c){ return c.outcome==='callback'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
-  var prompt = 'You are a sales manager assistant for Indian real estate/banking sector.\n\nGenerate a concise WhatsApp-ready daily call report.\n\nSales Rep: '+repN+'\nDate: '+new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'\nTotal Leads: '+contacts.length+' | Called: '+called.length+' | Skipped: '+skippedCount+'\nInterested: '+oc.interested+' | Callback: '+oc.callback+' | No Answer: '+oc.noanswer+' | Not Interested: '+oc.notinterested+'\nHot Leads: '+intList+'\nCallbacks Needed: '+cbList+'\n\nWrite 150-200 words with: performance overview, hot leads, callbacks, next action.\nFormat for WhatsApp plain text. Start with "📊 Daily Call Report – '+repN+'"';
+  var convRate = called.length > 0 ? Math.round((oc.interested/called.length)*100) : 0;
+  var naRate   = called.length > 0 ? Math.round((oc.noanswer/called.length)*100) : 0;
+  var prompt =
+    'You are an expert sales coach for Indian outbound sales teams (DSA, real estate, insurance, banking).\n\n' +
+    'Analyse today\'s calling session and write a sharp WhatsApp report a manager would genuinely find useful — not just a list of numbers. Use your knowledge of Indian sales benchmarks to give real context.\n\n' +
+    'REP: '+repN+'\n' +
+    'DATE: '+new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'\n\n' +
+    'TODAY\'S NUMBERS:\n' +
+    'Total Leads: '+contacts.length+' | Called: '+called.length+' | Skipped: '+skippedCount+'\n' +
+    '🟢 Interested: '+oc.interested+' | 🔔 Callback: '+oc.callback+' | 📵 No Answer: '+oc.noanswer+' | 🔴 Not Interested: '+oc.notinterested+'\n' +
+    'Conversion rate today: '+convRate+'% | No Answer rate: '+naRate+'%\n\n' +
+    'HOT LEADS — showed interest today (follow up urgently):\n'+intList+'\n\n' +
+    'CALLBACKS — promised a callback (call tomorrow):\n'+cbList+'\n\n' +
+    'INDUSTRY BENCHMARKS FOR CONTEXT:\n' +
+    '- Typical cold-call interest rate for home/personal loans: 12-20%\n' +
+    '- No Answer rate above 50% usually means wrong call timing (try 5-7pm)\n' +
+    '- 0 Not Interested can mean good lead quality OR rep is avoiding difficult conversations\n\n' +
+    'YOUR TASK — write 200-230 words covering exactly these 5 sections:\n' +
+    '1. PERFORMANCE VERDICT: Compare today\'s rate to benchmark. Was it strong/average/below? Be specific.\n' +
+    '2. COACHING OBSERVATION: One honest, specific observation about the numbers — spot any anomaly or pattern.\n' +
+    '3. PRIORITY FOLLOW-UPS: Top 2 hot leads with a specific next action for each (not just "follow up").\n' +
+    '4. CALLBACKS TOMORROW: Order the callbacks by priority with a brief reason for the top one.\n' +
+    '5. TACTICAL TIP: One concrete thing to try tomorrow based on today\'s data.\n\n' +
+    'TONE: Professional but warm. Hinglish phrases welcome. WhatsApp plain text — no markdown, no asterisks.\n' +
+    'Start with exactly: "📊 Daily Call Report – '+repN+'"';
 
   // No proxy configured — show formatted manual summary
   if(!AI_PROXY_URL || AI_PROXY_URL === 'YOUR_CLOUDFLARE_WORKER_URL') {
