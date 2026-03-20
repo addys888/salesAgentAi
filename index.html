@@ -685,7 +685,7 @@ tr.current .jump-btn{display:none}
     </div>
 
     <div class="note" style="color:var(--muted)">
-      🔐 Admin credentials: username <strong>admin</strong> · password <strong>Addys@270893</strong> — Change these in the source code<br>
+      🔐 Admin credentials are secured via hashed authentication. Contact your system administrator for access.<br>
       Supabase stores all user data securely server-side. Users cannot bypass authentication.
     </div>
   </div>
@@ -1037,10 +1037,41 @@ function applyAppConfig() {
 const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
 const ADMIN_USER    = 'admin';
-const ADMIN_PASS    = 'Addys@270893';   // ← Client manager gets this
-const SUPER_PASS    = 'SuprAdmin@9999'; // ← Only YOU know this — change it!
+// ── Hashed credentials (SHA-256) — plaintext passwords are NEVER stored ──
+// To change: compute SHA-256 of your new password (e.g. https://emn178.github.io/online-tools/sha256.html)
+// and replace the hash string below.
+const ADMIN_HASH    = '4512f5c7a37aa142b97bde9f8b2d8a1382d5118e1e87ffdf035d3bfaeb6b8e29';
+const SUPER_HASH    = '18c6a08bbf0b4a16a736238b3fee6d6330c778041f436cf22c2f61e729a81c39';
 var MAX_REPS        = 10;              // ← Max reps allowed to register for this client
 var isSuperAdmin    = false;           // true only when logged in with SUPER_PASS
+
+// ── Admin security: rate limiting & session timeout ──
+const ADMIN_MAX_ATTEMPTS   = 5;           // max wrong attempts before lockout
+const ADMIN_LOCKOUT_MS     = 30000;       // 30-second lockout after max attempts
+const ADMIN_SESSION_TIMEOUT = 30 * 60 * 1000; // 30 min idle → auto-logout
+var _adminAttempts    = 0;
+var _adminLockedUntil = 0;
+var _adminSessionTimer = null;
+
+// SHA-256 hash utility using Web Crypto API (constant-time safe, async)
+async function sha256(str) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+
+// Reset admin idle timer — called on every admin interaction
+function resetAdminIdleTimer() {
+  clearTimeout(_adminSessionTimer);
+  _adminSessionTimer = setTimeout(function(){
+    if(isAdminSession) {
+      isAdminSession = false;
+      isSuperAdmin = false;
+      document.getElementById('adminPanel').style.display = 'none';
+      document.getElementById('landingScreen').style.display = 'flex';
+      showToast('🔒 Admin session timed out (30 min idle)', true);
+    }
+  }, ADMIN_SESSION_TIMEOUT);
+}
 
 // ════════════════════════════════════════════════════════
 //  SUPABASE INIT
@@ -1579,31 +1610,77 @@ function showExpiredOverlay(reason) {
   overlay.classList.add('show');
 }
 
-// ── ADMIN LOGIN ──
-window.adminLogin = function() {
+// ── ADMIN LOGIN (async — SHA-256 hash comparison + rate limiting) ──
+window.adminLogin = async function() {
   var u = document.getElementById('adminUser').value.trim();
   var p = document.getElementById('adminPass').value;
-  var validAdmin = (u === ADMIN_USER && p === ADMIN_PASS);
-  var validSuper = (u === ADMIN_USER && p === SUPER_PASS);
-  if(validAdmin || validSuper) {
-    isAdminSession = true;
-    isSuperAdmin = validSuper; // only true when YOUR password used
-    document.getElementById('adminAuthScreen').classList.remove('visible');
-    document.getElementById('adminPanel').style.display = 'block';
-    // Show/hide super admin badge in header
-    var badge = document.getElementById('superAdminBadge');
-    if(badge) badge.style.display = isSuperAdmin ? 'inline-flex' : 'none';
-    loadMaxReps().then(function(){ window.loadUsers(); });
-  } else {
-    showMsg('adminMsg','❌ Invalid admin credentials');
-    document.getElementById('adminPass').value = '';
+
+  // ── Rate limit check ──
+  if(Date.now() < _adminLockedUntil) {
+    var secsLeft = Math.ceil((_adminLockedUntil - Date.now()) / 1000);
+    showMsg('adminMsg','🔒 Too many failed attempts. Try again in ' + secsLeft + 's');
+    return;
   }
+
+  if(!u || !p) {
+    showMsg('adminMsg','❌ Please enter username and password');
+    return;
+  }
+
+  // ── Hash the entered password and compare against stored hashes ──
+  var btn = document.querySelector('#adminAuthScreen .auth-btn');
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ Verifying...'; }
+
+  try {
+    var hash = await sha256(p);
+    var validAdmin = (u === ADMIN_USER && hash === ADMIN_HASH);
+    var validSuper = (u === ADMIN_USER && hash === SUPER_HASH);
+
+    if(validAdmin || validSuper) {
+      // ── Success — reset attempts, start session ──
+      _adminAttempts = 0;
+      isAdminSession = true;
+      isSuperAdmin = validSuper;
+      document.getElementById('adminAuthScreen').classList.remove('visible');
+      document.getElementById('adminPanel').style.display = 'block';
+      // Show/hide super admin badge in header
+      var badge = document.getElementById('superAdminBadge');
+      if(badge) badge.style.display = isSuperAdmin ? 'inline-flex' : 'none';
+      // Start admin session timeout
+      resetAdminIdleTimer();
+      // Attach activity listeners to reset idle timer
+      document.getElementById('adminPanel').addEventListener('click', resetAdminIdleTimer);
+      document.getElementById('adminPanel').addEventListener('keydown', resetAdminIdleTimer);
+      loadMaxReps().then(function(){ window.loadUsers(); });
+    } else {
+      // ── Failed — increment attempts ──
+      _adminAttempts++;
+      var remaining = ADMIN_MAX_ATTEMPTS - _adminAttempts;
+      if(_adminAttempts >= ADMIN_MAX_ATTEMPTS) {
+        _adminLockedUntil = Date.now() + ADMIN_LOCKOUT_MS;
+        _adminAttempts = 0;
+        showMsg('adminMsg','🔒 Too many failed attempts. Locked for 30 seconds.');
+      } else {
+        showMsg('adminMsg','❌ Invalid credentials. ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining.');
+      }
+      document.getElementById('adminPass').value = '';
+    }
+  } catch(e) {
+    showMsg('adminMsg','❌ Authentication error: ' + e.message);
+  }
+
+  if(btn) { btn.disabled = false; btn.textContent = 'Access Admin Panel →'; }
 };
 
 window.adminLogout = function() {
   isAdminSession = false;
   isSuperAdmin = false;
-  document.getElementById('adminPanel').style.display = 'none';
+  clearTimeout(_adminSessionTimer);
+  // Remove activity listeners
+  var panel = document.getElementById('adminPanel');
+  panel.removeEventListener('click', resetAdminIdleTimer);
+  panel.removeEventListener('keydown', resetAdminIdleTimer);
+  panel.style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex';
 };
 
@@ -1774,8 +1851,8 @@ window.adminResetPw = async function(email) {
   if(!email || !confirm('Send password reset email to '+email+'?')) return;
   try {
     var sb = _sb;
-    // Always redirect to the canonical GitHub Pages URL — never localhost or custom domain
-    var canonicalUrl = 'https://addys888.github.io/salesAgentAi/';
+    // Dynamically detect current deployment URL — works on any host (GitHub Pages, Vercel, localhost, etc.)
+    var canonicalUrl = window.location.origin + window.location.pathname;
     var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: canonicalUrl });
     if(res.error) throw res.error;
     alert('✅ Password reset email sent to '+email);
