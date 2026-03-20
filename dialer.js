@@ -1,6 +1,112 @@
 // ════════════════════════════════════════════════════════
 //  DIALER.JS — File processing, Dialer engine, Sessions, AI, Email
+//  Features: DND Guard, Call Timer, Duplicate Detection, Search,
+//            Call Notes, Export, Callback Scheduler
 // ════════════════════════════════════════════════════════
+
+// ── F7: Call Duration Timer state ──
+var _callTimerInterval = null;
+var _callStartTime = null;
+
+// ── F6: DND Time Guard ──
+function isDNDHours() {
+  var now = new Date();
+  var h = now.getHours();
+  return h < 9 || h >= 21;
+}
+
+function showDNDBanner() {
+  var existing = document.getElementById('dndBannerLive');
+  if(existing) return;
+  var banner = document.createElement('div');
+  banner.className = 'dnd-banner';
+  banner.id = 'dndBannerLive';
+  var icon = document.createElement('span');
+  icon.className = 'dnd-icon';
+  icon.textContent = '⏰';
+  var text = document.createElement('div');
+  text.className = 'dnd-text';
+  text.textContent = 'TRAI DND hours active (9PM - 9AM). Calling is not recommended during this time to comply with regulations.';
+  var dismiss = document.createElement('button');
+  dismiss.className = 'dnd-dismiss';
+  dismiss.textContent = '\u00D7';
+  dismiss.onclick = function(){ banner.remove(); };
+  banner.appendChild(icon);
+  banner.appendChild(text);
+  banner.appendChild(dismiss);
+  var container = document.querySelector('.container');
+  if(container) container.insertBefore(banner, container.firstChild.nextSibling);
+}
+
+function removeDNDBanner() {
+  var b = document.getElementById('dndBannerLive');
+  if(b) b.remove();
+}
+
+// ── F7: Timer functions ──
+function startCallTimer() {
+  _callStartTime = Date.now();
+  var el = document.getElementById('callDuration');
+  if(el) { el.textContent = '00:00'; el.parentElement.classList.add('active'); }
+  clearInterval(_callTimerInterval);
+  _callTimerInterval = setInterval(function(){
+    if(!_callStartTime) return;
+    var secs = Math.floor((Date.now() - _callStartTime) / 1000);
+    var m = String(Math.floor(secs/60)).padStart(2,'0');
+    var s = String(secs%60).padStart(2,'0');
+    var el2 = document.getElementById('callDuration');
+    if(el2) el2.textContent = m+':'+s;
+  }, 1000);
+}
+
+function stopCallTimer() {
+  clearInterval(_callTimerInterval);
+  var duration = _callStartTime ? Math.floor((Date.now() - _callStartTime)/1000) : 0;
+  _callStartTime = null;
+  var el = document.getElementById('callDuration');
+  if(el) el.parentElement.classList.remove('active');
+  return duration;
+}
+
+// ── F9: Duplicate Detection ──
+function deduplicateContacts(contactList) {
+  var seen = {};
+  var unique = [];
+  var dupCount = 0;
+  contactList.forEach(function(c){
+    if(!seen[c.number]) {
+      seen[c.number] = true;
+      unique.push(c);
+    } else {
+      dupCount++;
+    }
+  });
+  if(dupCount > 0) {
+    appAlert('Found ' + dupCount + ' duplicate number' + (dupCount>1?'s':'') + ' - removed automatically. ' + unique.length + ' unique contacts remain.', '🔍');
+  }
+  return unique;
+}
+
+// ── F4: Search & Filter ──
+var _searchDebounce = null;
+window.filterQueue = function() {
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(function(){
+    var query = (document.getElementById('queueSearch').value || '').toLowerCase().trim();
+    var filter = document.getElementById('queueFilter').value;
+    var visibleCount = 0;
+    contacts.forEach(function(c, i){
+      var row = document.getElementById('row-'+i);
+      if(!row) return;
+      var matchText = !query || (c.name && c.name.toLowerCase().indexOf(query) >= 0) || c.number.indexOf(query) >= 0;
+      var matchStatus = filter === 'all' || c.status === filter || (filter === 'pending' && c.status === 'current');
+      row.style.display = (matchText && matchStatus) ? '' : 'none';
+      if(matchText && matchStatus) visibleCount++;
+    });
+    var countEl = document.getElementById('searchCount');
+    if(countEl) countEl.textContent = visibleCount + '/' + contacts.length;
+  }, 200);
+};
 
 // ════════════════════════════════════════════════════════
 //  FILE UPLOAD & PARSING
@@ -138,9 +244,13 @@ window.startQueue = function() {
   contacts = [];
   window._rawRows.forEach(function(row){
     var num = cleanNumber(row[pc]);
-    if(num) contacts.push({ number:num, name: nc!=null?(row[nc]||''):'', note: oc!=null?(row[oc]||''):'', status:'pending', outcome:'' });
+    if(num) contacts.push({ number:num, name: nc!=null?(row[nc]||''):'', note: oc!=null?(row[oc]||''):'', status:'pending', outcome:'', callNote:'', duration:0 });
   });
   if(!contacts.length){ appAlert('No valid Indian mobile numbers found.', '📵'); return; }
+  // F9: Deduplicate
+  contacts = deduplicateContacts(contacts);
+  // F6: DND check
+  if(isDNDHours()) showDNDBanner(); else removeDNDBanner();
   document.getElementById('configBar').style.display = 'none';
   document.getElementById('statsBar').style.display = 'grid';
   document.getElementById('dialerPanel').style.display = 'block';
@@ -263,6 +373,14 @@ function showContact(i) {
   hasCalledCurrent = false; currentOutcome = '';
   document.getElementById('btnNext').disabled = true;
   ['interested','callback','noanswer','notinterested'].forEach(function(o){ document.getElementById('oc-'+o).className='outcome-btn'; });
+  // F7: Reset timer display
+  stopCallTimer();
+  // F2: Clear note input
+  var noteInp = document.getElementById('callNoteInput');
+  if(noteInp) noteInp.value = '';
+  // F8: Hide callback scheduler
+  var cbSched = document.getElementById('callbackSchedRow');
+  if(cbSched) cbSched.style.display = 'none';
   if(i >= contacts.length) { allDone(); return; }
   var anyPending = contacts.some(function(c){ return c.status === 'pending'; });
   if(!anyPending){ allDone(); return; }
@@ -272,18 +390,28 @@ function showContact(i) {
   document.getElementById('currentNote').textContent = c.note||'';
   document.getElementById('btnCall').href = 'https://wa.me/91'+c.number;
   document.getElementById('btnPhone').href = 'tel:+91'+c.number;
-  var emojis = ['👤','🧑','👩','👨','🙋','🤝','💼','🧑‍💼'];
+  var emojis = ['\u{1F464}','\u{1F9D1}','\u{1F469}','\u{1F468}','\u{1F64B}','\u{1F91D}','\u{1F4BC}','\u{1F9D1}\u200D\u{1F4BC}'];
   document.getElementById('avEl').textContent = emojis[i%8];
-  setStatus('active','● Ready'); updateProgress(); updateStats();
+  // F2: Load saved note if exists
+  if(noteInp && c.callNote) noteInp.value = c.callNote;
+  // F6: DND check each contact
+  if(isDNDHours()) showDNDBanner(); else removeDNDBanner();
+  setStatus('active','\u25CF Ready'); updateProgress(); updateStats();
 }
 
 window.markCalled = function() {
   if(hasCalledCurrent) return;
+  // F6: DND warning (non-blocking)
+  if(isDNDHours()) {
+    showDNDBanner();
+  }
   hasCalledCurrent = true;
-  setStatus('calling','📲 Calling...');
+  setStatus('calling','\uD83D\uDCF2 Calling...');
   document.getElementById('avEl').classList.add('calling');
   document.getElementById('btnNext').disabled = false;
   setTimeout(function(){ document.getElementById('avEl').classList.remove('calling'); }, 4000);
+  // F7: Start call timer
+  startCallTimer();
   markDirty();
 };
 
@@ -296,17 +424,30 @@ window.setOutcome = function(o) {
 
 window.nextContact = function() {
   if(!hasCalledCurrent) return;
+  // F7: Stop timer and record duration
+  var dur = stopCallTimer();
+  contacts[currentIndex].duration = dur;
+  // F2: Save call note
+  var noteInp = document.getElementById('callNoteInput');
+  if(noteInp) contacts[currentIndex].callNote = noteInp.value.trim();
   contacts[currentIndex].status = 'done'; contacts[currentIndex].outcome = currentOutcome;
   updateRowStatus(currentIndex,'done');
   var cell = document.getElementById('oc-cell-'+currentIndex);
-  if(cell){ var L={interested:'🟢 Interested',callback:'🔔 Callback',noanswer:'📵 No Answer',notinterested:'🔴 Not Interested','':'—'}; cell.textContent=L[currentOutcome]||'—'; }
+  if(cell){ var L={interested:'\uD83D\uDFE2 Interested',callback:'\uD83D\uDD14 Callback',noanswer:'\uD83D\uDCF5 No Answer',notinterested:'\uD83D\uDD34 Not Interested','':'\u2014'}; cell.textContent=L[currentOutcome]||'\u2014'; }
   calledCount++;
+  // F8: If callback, schedule it
+  if(currentOutcome === 'callback') {
+    scheduleCallbackPrompt(contacts[currentIndex]);
+  }
   currentIndex = findNextPending();
   updateStats(); showContact(currentIndex);
   markDirty(); autoSaveSession();
+  // Save daily stats on every 5th call
+  if(calledCount % 5 === 0) saveDailyStats();
 };
 
 window.skipContact = function() {
+  stopCallTimer(); // F7: Stop timer on skip
   contacts[currentIndex].status='skipped'; contacts[currentIndex].outcome='skipped';
   updateRowStatus(currentIndex,'skipped'); skippedCount++;
   currentIndex = findNextPending();
@@ -350,19 +491,28 @@ function setStatus(type, text) {
 }
 
 function allDone() {
+  stopCallTimer(); // F7
+  removeDNDBanner(); // F6
   document.getElementById('dialerPanel').style.display='none';
   document.getElementById('doneBanner').style.display='block';
   var oc = contacts.reduce(function(a,c){ a[c.outcome]=(a[c.outcome]||0)+1; return a; },{});
+  // F7: Calculate avg duration
+  var calledList = contacts.filter(function(c){ return c.status==='done' && c.duration > 0; });
+  var avgDur = calledList.length ? Math.round(calledList.reduce(function(s,c){ return s+c.duration; },0)/calledList.length) : 0;
+  var avgStr = avgDur > 0 ? ' \u00B7 Avg call: '+Math.floor(avgDur/60)+'m '+avgDur%60+'s' : '';
   document.getElementById('doneSummary').textContent =
-    'Called: '+calledCount+' · Skipped: '+skippedCount+' · Interested: '+(oc.interested||0)+' · Callbacks: '+(oc.callback||0);
-  setStatus('idle','✓ Complete'); updateProgress();
+    'Called: '+calledCount+' \u00B7 Skipped: '+skippedCount+' \u00B7 Interested: '+(oc.interested||0)+' \u00B7 Callbacks: '+(oc.callback||0)+avgStr;
+  setStatus('idle','\u2713 Complete'); updateProgress();
   completeSession();
+  saveDailyStats(); // F1: Save stats for analytics
 }
 
 window.resetDialer = function() {
   contacts=[]; currentIndex=0; calledCount=0; skippedCount=0;
   _activeSessionId = null; _isDirty = false; jumpReturnIndex = -1;
   clearTimeout(_idleTimer);
+  stopCallTimer(); // F7
+  removeDNDBanner(); // F6
   ['dialerPanel','statsBar','doneBanner','configBar'].forEach(function(id){ document.getElementById(id).style.display='none'; });
   document.getElementById('uploadZone').style.display='block';
   var fi=document.getElementById('fileInput'); if(fi) fi.value='';
@@ -576,16 +726,8 @@ window.discardSession = async function() {
 };
 
 // ════════════════════════════════════════════════════════
-//  TEMPLATES
+//  TEMPLATES — uses TEMPLATES from templates.js
 // ════════════════════════════════════════════════════════
-var TEMPLATES = {
-  followup: {name:'📋 Follow-up', text:function(n,r){ return 'Hi '+(n||'there')+'! 👋\n\nThis is '+(r||'your advisor')+'. Thank you for taking my call today.\n\nI\'d love to share more details about our offerings.\n\nFeel free to reply anytime! 😊'; }},
-  intro:    {name:'👋 Introduction', text:function(n,r){ return 'Hello '+(n||'there')+'! 🙏\n\nI\'m '+(r||'your advisor')+' from our sales team. I tried reaching you regarding a special opportunity.\n\nCould we connect at your convenient time? 📅'; }},
-  callback: {name:'🔔 Callback', text:function(n,r){ return 'Hi '+(n||'there')+'! ☎️\n\nI\'m '+(r||'your advisor')+' — I called earlier but couldn\'t connect.\n\nPlease let me know your best time for a quick call! 🌟'; }},
-  offer:    {name:'🏷️ Special Offer', text:function(n,r){ return 'Hi '+(n||'there')+'! 🎉\n\nWe have an exclusive limited-time offer for you.\n\nYour advisor '+(r?'('+r+') ':'')+' wants to make sure you don\'t miss out.\n\nShall we connect briefly? 🤝'; }},
-  property: {name:'🏠 Property Info', text:function(n,r){ return 'Hello '+(n||'there')+'! 🏠\n\nThis is '+(r||'your property advisor')+'. I have exciting properties matching your budget.\n\nCan I send you the details and brochure? 📲'; }},
-  loan:     {name:'💰 Loan Offer', text:function(n,r){ return 'Hi '+(n||'there')+'! 💰\n\nI\'m '+(r||'your financial advisor')+'. We have a special pre-approved loan offer:\n✅ Lowest interest rates\n✅ Quick processing\n✅ Minimal documentation\n\nInterested? Let\'s connect! 📞'; }}
-};
 
 function getRepName() {
   var meta = (currentUser && currentUser.user_metadata) || {};
@@ -595,12 +737,17 @@ function getRepName() {
 window.openTemplates = function() {
   var c = contacts[currentIndex] || {};
   var repN = getRepName();
+  var lang = getTplLang();
   var list = document.getElementById('tplList');
-  list.textContent = ''; // Safe clear
+  list.textContent = '';
+  // Set language selector value
+  var langSel = document.getElementById('tplLang');
+  if(langSel) langSel.value = lang;
 
   Object.entries(TEMPLATES).forEach(function(entry){
     var key=entry[0], tpl=entry[1];
-    var msg = tpl.text(c.name, repN);
+    var textFn = tpl.text[lang] || tpl.text['en'];
+    var msg = textFn(c.name, repN);
     var waUrl = 'https://wa.me/91'+(c.number||'')+'?text='+encodeURIComponent(msg);
 
     var div = document.createElement('div');
@@ -608,24 +755,29 @@ window.openTemplates = function() {
 
     var nameDiv = document.createElement('div');
     nameDiv.className = 'tpl-name';
-    nameDiv.textContent = tpl.name;
+    var langLabel = TEMPLATE_LANGS.find(function(l){ return l.code === lang; });
+    nameDiv.textContent = tpl.name + (langLabel ? ' \u00B7 ' + langLabel.label : '');
 
     var previewDiv = document.createElement('div');
     previewDiv.className = 'tpl-preview';
-    previewDiv.textContent = msg.substring(0,140)+'...';
+    previewDiv.textContent = msg.substring(0,160) + (msg.length > 160 ? '...' : '');
 
     var sendDiv = document.createElement('div');
     sendDiv.className = 'tpl-send';
-    sendDiv.textContent = '👆 Tap to open in WhatsApp';
+    sendDiv.textContent = '\uD83D\uDC46 Tap to open in WhatsApp';
 
     div.appendChild(nameDiv);
     div.appendChild(previewDiv);
     div.appendChild(sendDiv);
-
     div.addEventListener('click', function(){ window.open(waUrl,'_blank'); document.getElementById('tplModal').classList.remove('open'); });
     list.appendChild(div);
   });
   document.getElementById('tplModal').classList.add('open');
+};
+
+window.onTplLangChange = function(sel) {
+  setTplLang(sel.value);
+  window.openTemplates(); // Re-render with new language
 };
 
 // ════════════════════════════════════════════════════════
@@ -838,3 +990,246 @@ window.sendEmailReport = function() {
       btn.textContent = '📧 Send Report';
     });
 };
+
+// ════════════════════════════════════════════════════════
+//  F5: EXPORT REPORT (PDF / Excel)
+// ════════════════════════════════════════════════════════
+window.exportPDF = function() {
+  if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+    appAlert('PDF library not loaded. Please check your internet connection.', '📄');
+    return;
+  }
+  var doc = new (window.jspdf || jspdf).jsPDF();
+  var repN = getRepName();
+  var d = new Date();
+  var dateStr = d.toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+  // Title
+  doc.setFontSize(18);
+  doc.setTextColor(37, 211, 102);
+  doc.text('Daily Call Report', 14, 20);
+  doc.setFontSize(11);
+  doc.setTextColor(100);
+  doc.text(repN + ' | ' + dateStr, 14, 28);
+
+  // Stats
+  var oc = contacts.reduce(function(a,c){ a[c.outcome]=(a[c.outcome]||0)+1; return a; },{});
+  var calledList = contacts.filter(function(c){ return c.status==='done'; });
+  var avgDur = calledList.length ? Math.round(calledList.reduce(function(s,c){ return s+(c.duration||0); },0)/calledList.length) : 0;
+
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  var y = 40;
+  doc.text('Call Statistics', 14, y); y += 8;
+  doc.setFontSize(10);
+  doc.text('Total Leads: ' + contacts.length, 14, y); y += 6;
+  doc.text('Called: ' + calledCount + '  |  Skipped: ' + skippedCount, 14, y); y += 6;
+  doc.text('Interested: ' + (oc.interested||0) + '  |  Callback: ' + (oc.callback||0), 14, y); y += 6;
+  doc.text('No Answer: ' + (oc.noanswer||0) + '  |  Not Interested: ' + (oc.notinterested||0), 14, y); y += 6;
+  if(avgDur > 0) { doc.text('Avg Call Duration: ' + Math.floor(avgDur/60) + 'm ' + avgDur%60 + 's', 14, y); y += 6; }
+  y += 6;
+
+  // Contact table
+  doc.setFontSize(12);
+  doc.text('Contact Details', 14, y); y += 8;
+  doc.setFontSize(8);
+  doc.text('#', 14, y); doc.text('Number', 24, y); doc.text('Name', 65, y); doc.text('Outcome', 110, y); doc.text('Note', 150, y);
+  y += 5;
+
+  contacts.forEach(function(c, i) {
+    if(y > 275) { doc.addPage(); y = 20; }
+    doc.setTextColor(c.status === 'done' ? 0 : 150);
+    doc.text(String(i+1), 14, y);
+    doc.text('+91 ' + c.number, 24, y);
+    doc.text((c.name || '-').substring(0, 20), 65, y);
+    var ocLabel = {interested:'Interested',callback:'Callback',noanswer:'No Answer',notinterested:'Not Int.',skipped:'Skipped'};
+    doc.text(ocLabel[c.outcome] || '-', 110, y);
+    doc.text((c.callNote || '-').substring(0, 25), 150, y);
+    y += 5;
+  });
+
+  doc.save('call-report-' + d.toISOString().split('T')[0] + '.pdf');
+  showToast('📄 PDF exported!');
+};
+
+window.exportExcel = function() {
+  if(typeof XLSX === 'undefined') {
+    appAlert('Excel library not loaded.', '📊');
+    return;
+  }
+  var data = [['#', 'Number', 'Name', 'Outcome', 'Call Note', 'Duration (sec)', 'Status']];
+  contacts.forEach(function(c, i) {
+    data.push([i+1, '+91 ' + c.number, c.name || '', c.outcome || '', c.callNote || '', c.duration || 0, c.status]);
+  });
+
+  var ws = XLSX.utils.aoa_to_sheet(data);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Call Report');
+
+  // Summary sheet
+  var oc = contacts.reduce(function(a,c){ a[c.outcome]=(a[c.outcome]||0)+1; return a; },{});
+  var summaryData = [
+    ['Call Report Summary'],
+    ['Date', new Date().toLocaleDateString('en-IN')],
+    ['Rep', getRepName()],
+    [''],
+    ['Total Leads', contacts.length],
+    ['Called', calledCount],
+    ['Skipped', skippedCount],
+    ['Interested', oc.interested || 0],
+    ['Callback', oc.callback || 0],
+    ['No Answer', oc.noanswer || 0],
+    ['Not Interested', oc.notinterested || 0]
+  ];
+  var ws2 = XLSX.utils.aoa_to_sheet(summaryData);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+  XLSX.writeFile(wb, 'call-report-' + new Date().toISOString().split('T')[0] + '.xlsx');
+  showToast('📊 Excel exported!');
+};
+
+// ════════════════════════════════════════════════════════
+//  F8: CALLBACK SCHEDULER
+// ════════════════════════════════════════════════════════
+function scheduleCallbackPrompt(contact) {
+  var schedRow = document.getElementById('callbackSchedRow');
+  if(!schedRow) return;
+  schedRow.style.display = 'flex';
+  // Set default date to tomorrow
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var dateInput = document.getElementById('cbDate');
+  var timeInput = document.getElementById('cbTime');
+  if(dateInput) dateInput.value = tomorrow.toISOString().split('T')[0];
+  if(timeInput) timeInput.value = '10:00';
+  // Store contact for saving
+  schedRow.dataset.number = contact.number;
+  schedRow.dataset.name = contact.name || '';
+}
+
+window.saveCallback = async function() {
+  var schedRow = document.getElementById('callbackSchedRow');
+  if(!schedRow || !_sb || !currentUser) return;
+  var cbDate = document.getElementById('cbDate').value;
+  var cbTime = document.getElementById('cbTime').value;
+  if(!cbDate) { showToast('Please select a date'); return; }
+
+  try {
+    await _sb.from('callbacks').insert({
+      user_id: currentUser.id,
+      contact_name: schedRow.dataset.name || '',
+      contact_number: schedRow.dataset.number || '',
+      callback_date: cbDate,
+      callback_time: cbTime || null,
+      note: document.getElementById('callNoteInput') ? document.getElementById('callNoteInput').value : '',
+      status: 'pending'
+    });
+    showToast('🔔 Callback scheduled for ' + cbDate);
+    schedRow.style.display = 'none';
+  } catch(e) {
+    console.warn('Callback save failed:', e.message);
+    showToast('Could not save callback - will try again');
+  }
+};
+
+window.checkTodayCallbacks = async function() {
+  if(!_sb || !currentUser) return;
+  try {
+    var today = new Date().toISOString().split('T')[0];
+    var res = await _sb.from('callbacks')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .eq('status', 'pending')
+      .lte('callback_date', today)
+      .order('callback_time', { ascending: true });
+    if(res.error || !res.data || !res.data.length) return;
+    showCallbackBanner(res.data);
+  } catch(e) { console.warn('Callback check:', e.message); }
+};
+
+function showCallbackBanner(callbacks) {
+  var existing = document.getElementById('callbackBannerLive');
+  if(existing) existing.remove();
+  var banner = document.createElement('div');
+  banner.className = 'callback-banner';
+  banner.id = 'callbackBannerLive';
+
+  var header = document.createElement('div');
+  header.className = 'cb-header';
+  var icon = document.createElement('span');
+  icon.className = 'cb-icon';
+  icon.textContent = '🔔';
+  var title = document.createElement('span');
+  title.className = 'cb-title';
+  title.textContent = 'Callbacks Due Today';
+  var count = document.createElement('span');
+  count.className = 'cb-count';
+  count.textContent = callbacks.length;
+  header.appendChild(icon);
+  header.appendChild(title);
+  header.appendChild(count);
+  banner.appendChild(header);
+
+  var list = document.createElement('div');
+  list.className = 'cb-list';
+  callbacks.slice(0, 5).forEach(function(cb) {
+    var item = document.createElement('div');
+    item.className = 'cb-item';
+    var name = document.createElement('span');
+    name.className = 'cb-name';
+    name.textContent = (cb.contact_name || '+91 ' + cb.contact_number);
+    var time = document.createElement('span');
+    time.className = 'cb-time';
+    time.textContent = cb.callback_time ? cb.callback_time.substring(0,5) : 'Any time';
+    var doneBtn = document.createElement('button');
+    doneBtn.className = 'cb-done-btn';
+    doneBtn.textContent = '✓ Done';
+    doneBtn.onclick = function(e) {
+      e.stopPropagation();
+      markCallbackDone(cb.id, item);
+    };
+    item.appendChild(name);
+    item.appendChild(time);
+    item.appendChild(doneBtn);
+    list.appendChild(item);
+  });
+  banner.appendChild(list);
+
+  var container = document.querySelector('.container');
+  var uploadZone = document.getElementById('uploadZone');
+  if(container && uploadZone) container.insertBefore(banner, uploadZone);
+}
+
+async function markCallbackDone(cbId, itemEl) {
+  if(!_sb) return;
+  try {
+    await _sb.from('callbacks').update({ status: 'done' }).eq('id', cbId);
+    if(itemEl) { itemEl.style.opacity = '0.3'; itemEl.style.textDecoration = 'line-through'; }
+    showToast('✓ Callback marked done');
+  } catch(e) { console.warn('Callback update:', e.message); }
+}
+
+// ════════════════════════════════════════════════════════
+//  F1: SAVE DAILY STATS (for admin analytics)
+// ════════════════════════════════════════════════════════
+async function saveDailyStats() {
+  if(!_sb || !currentUser || !contacts.length) return;
+  var oc = contacts.reduce(function(a,c){ a[c.outcome]=(a[c.outcome]||0)+1; return a; },{});
+  var calledList = contacts.filter(function(c){ return c.status==='done' && c.duration > 0; });
+  var avgDur = calledList.length ? Math.round(calledList.reduce(function(s,c){ return s+c.duration; },0)/calledList.length) : 0;
+
+  try {
+    await _sb.from('daily_stats').upsert({
+      user_id: currentUser.id,
+      stat_date: new Date().toISOString().split('T')[0],
+      total_leads: contacts.length,
+      called: calledCount,
+      skipped: skippedCount,
+      interested: oc.interested || 0,
+      callback: oc.callback || 0,
+      noanswer: oc.noanswer || 0,
+      notinterested: oc.notinterested || 0,
+      avg_call_duration: avgDur
+    }, { onConflict: 'user_id,stat_date' });
+  } catch(e) { console.warn('Daily stats save:', e.message); }
+}

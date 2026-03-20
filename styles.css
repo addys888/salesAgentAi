@@ -329,6 +329,116 @@ tr.current .jump-btn{display:none}
 .kbd-hint{display:inline-flex;align-items:center;gap:4px;font-size:9px;color:var(--muted);margin-left:4px;opacity:.7}
 .kbd{display:inline-block;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:9px;line-height:1.4}
 
+/* ═══════════════════════════════════════════════
+   F4 — SEARCH BAR
+═══════════════════════════════════════════════ */
+.search-bar{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border2);align-items:center}
+.search-bar input{flex:1;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;transition:border .2s}
+.search-bar input:focus{border-color:var(--green)}
+.search-bar select{background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:7px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none;cursor:pointer}
+.search-bar select:focus{border-color:var(--green)}
+.search-bar .search-count{font-size:10px;color:var(--muted);white-space:nowrap}
+
+/* ═══════════════════════════════════════════════
+   F6 — DND TIME GUARD
+═══════════════════════════════════════════════ */
+.dnd-banner{background:rgba(255,171,64,.12);border:1px solid rgba(255,171,64,.3);border-radius:10px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;animation:fadeUp .4s ease}
+.dnd-banner .dnd-icon{font-size:20px;flex-shrink:0}
+.dnd-banner .dnd-text{font-size:11px;color:var(--warn);flex:1;line-height:1.5}
+.dnd-banner .dnd-text strong{color:var(--text)}
+.dnd-banner .dnd-dismiss{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px}
+
+/* ═══════════════════════════════════════════════
+   F7 — CALL DURATION TIMER
+═══════════════════════════════════════════════ */
+.call-timer{display:inline-flex;align-items:center;gap:6px;background:rgba(37,211,102,.1);border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--green);letter-spacing:1px}
+.call-timer.active{animation:pulse-border 2s infinite}
+.call-timer .timer-icon{font-size:12px}
+
+/* ═══════════════════════════════════════════════
+   F2 — CALL NOTES
+═══════════════════════════════════════════════ */
+.notes-row{padding:10px 20px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:8px}
+.notes-row input{flex:1;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;transition:border .2s}
+.notes-row input:focus{border-color:var(--green)}
+.notes-row input::placeholder{color:var(--muted);font-style:italic}
+
+/* ═══════════════════════════════════════════════
+   F9 — DUPLICATE BADGE
+═══════════════════════════════════════════════ */
+.dup-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(255,171,64,.15);color:var(--warn);border:1px solid rgba(255,171,64,.3);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:700}
+
+/* ═══════════════════════════════════════════════
+   F10 — TEMPLATE LANGUAGE SELECTOR
+═══════════════════════════════════════════════ */
+.tpl-lang-select{background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none;cursor:pointer}
+.tpl-lang-select:focus{border-color:var(--green)}
+.tpl-lang-badge{font-size:9px;padding:2px 7px;border-radius:6px;background:rgba(37,211,102,.1);color:var(--green);border:1px solid rgba(37,211,102,.2)}
+
+/* ═══════════════════════════════════════════════
+   F5 — EXPORT BUTTONS
+═══════════════════════════════════════════════ */
+.btn-export{background:rgba(100,181,246,.1);color:#64b5f6;border:1px solid rgba(100,181,246,.25)}
+.btn-export:hover{background:rgba(100,181,246,.2)}
+.btn-export-excel{background:rgba(76,175,80,.1);color:#66bb6a;border:1px solid rgba(76,175,80,.25)}
+.btn-export-excel:hover{background:rgba(76,175,80,.2)}
+
+/* ═══════════════════════════════════════════════
+   F8 — CALLBACK BANNER & SCHEDULER
+═══════════════════════════════════════════════ */
+.callback-banner{background:rgba(255,171,64,.08);border:1px solid rgba(255,171,64,.25);border-radius:14px;padding:14px 18px;margin-bottom:16px;animation:fadeUp .4s ease;cursor:pointer;transition:all .2s}
+.callback-banner:hover{border-color:var(--warn);transform:translateY(-1px)}
+.callback-banner .cb-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.callback-banner .cb-header .cb-icon{font-size:20px}
+.callback-banner .cb-header .cb-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--warn);flex:1}
+.callback-banner .cb-header .cb-count{background:var(--warn);color:#000;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.callback-banner .cb-list{display:flex;flex-direction:column;gap:6px}
+.callback-banner .cb-item{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text)}
+.callback-banner .cb-item .cb-name{font-weight:600;flex:1}
+.callback-banner .cb-item .cb-time{color:var(--muted);font-size:10px}
+.callback-banner .cb-item .cb-done-btn{background:rgba(37,211,102,.1);color:var(--green);border:1px solid rgba(37,211,102,.2);border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700}
+.callback-sched{display:flex;gap:8px;align-items:center;margin-top:6px;padding-top:8px;border-top:1px solid var(--border2)}
+.callback-sched input[type=date],.callback-sched input[type=time]{background:var(--input-bg);border:1px solid var(--border2);border-radius:7px;padding:5px 8px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none}
+.callback-sched input:focus{border-color:var(--warn)}
+
+/* ═══════════════════════════════════════════════
+   F1 — ANALYTICS DASHBOARD
+═══════════════════════════════════════════════ */
+.analytics-wrap{margin-top:20px}
+.analytics-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.analytics-header h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--purple);flex:1}
+.period-select{background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none;cursor:pointer}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+@media(max-width:600px){.chart-grid{grid-template-columns:1fr}}
+.chart-card{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:16px;position:relative}
+.chart-card h4{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.chart-card canvas{width:100%!important;max-height:220px}
+
+/* ═══════════════════════════════════════════════
+   F3 — TEAM LEADERBOARD
+═══════════════════════════════════════════════ */
+.leaderboard-card{background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-top:16px}
+.leaderboard-header{background:var(--surface2);padding:12px 18px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border2)}
+.leaderboard-header h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--purple);flex:1}
+.leaderboard-table{width:100%;border-collapse:collapse}
+.leaderboard-table th{background:var(--surface2);padding:8px 14px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:400}
+.leaderboard-table td{padding:10px 14px;font-size:12px;border-top:1px solid rgba(168,85,247,.06)}
+.leaderboard-table tr:hover td{background:rgba(168,85,247,.03)}
+.lb-rank{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.lb-rank.gold{color:#ffd700}
+.lb-rank.silver{color:#c0c0c0}
+.lb-rank.bronze{color:#cd7f32}
+.lb-bar{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;margin-top:4px}
+.lb-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--purple2),var(--purple));transition:width .5s}
+
+/* ═══════════════════════════════════════════════
+   ADMIN TABS
+═══════════════════════════════════════════════ */
+.admin-tabs{display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:3px;margin-bottom:20px}
+.admin-tab{padding:8px 16px;border-radius:8px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;color:var(--muted);border:none;background:none}
+.admin-tab.active{background:var(--surface);color:var(--purple);box-shadow:0 2px 8px var(--shadow)}
+.admin-tab:hover:not(.active){color:var(--text)}
+
 /* ANIMATIONS */
 @keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
