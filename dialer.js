@@ -793,10 +793,15 @@ window.generateAISummary = async function() {
   var oc = {interested:0,callback:0,noanswer:0,notinterested:0};
   called.forEach(function(c){ if(oc[c.outcome]!==undefined) oc[c.outcome]++; });
   var repN = getRepName();
-  var intList = called.filter(function(c){ return c.outcome==='interested'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
-  var cbList  = called.filter(function(c){ return c.outcome==='callback'; }).map(function(c){ return c.name||'+91'+c.number; }).join(', ')||'None';
+  var intList = called.filter(function(c){ return c.outcome==='interested'; }).map(function(c){ return (c.name||'+91'+c.number) + (c.callNote ? ' ('+c.callNote+')' : ''); }).join(', ')||'None';
+  var cbList  = called.filter(function(c){ return c.outcome==='callback'; }).map(function(c){ return (c.name||'+91'+c.number) + (c.callNote ? ' ('+c.callNote+')' : ''); }).join(', ')||'None';
   var convRate = called.length > 0 ? Math.round((oc.interested/called.length)*100) : 0;
   var naRate   = called.length > 0 ? Math.round((oc.noanswer/called.length)*100) : 0;
+  // Build call notes for AI context
+  var notedContacts = called.filter(function(c){ return c.callNote && c.callNote.trim(); });
+  var notesSummary = notedContacts.length > 0
+    ? notedContacts.map(function(c){ return '• ' + (c.name||'+91'+c.number) + ' ['+c.outcome+'] → ' + c.callNote; }).join('\n')
+    : 'No notes recorded.';
   var prompt =
     'You are an expert sales coach for Indian outbound sales teams (DSA, real estate, insurance, banking).\n\n' +
     'Analyse today\'s calling session and write a sharp WhatsApp report a manager would genuinely find useful.\n\n' +
@@ -808,7 +813,8 @@ window.generateAISummary = async function() {
     'Conversion rate today: '+convRate+'% | No Answer rate: '+naRate+'%\n\n' +
     'HOT LEADS:\n'+intList+'\n\n' +
     'CALLBACKS:\n'+cbList+'\n\n' +
-    'Write 200-230 words covering: PERFORMANCE VERDICT, COACHING OBSERVATION, PRIORITY FOLLOW-UPS, CALLBACKS TOMORROW, TACTICAL TIP.\n' +
+    'REP CALL NOTES (use these for coaching insights and follow-up recommendations):\n'+notesSummary+'\n\n' +
+    'Write 200-230 words covering: PERFORMANCE VERDICT, COACHING OBSERVATION (reference specific call notes if available), PRIORITY FOLLOW-UPS, CALLBACKS TOMORROW, TACTICAL TIP.\n' +
     'TONE: Professional but warm. Hinglish phrases welcome. WhatsApp plain text.\n' +
     'Start with exactly: "📊 Daily Call Report – '+repN+'"';
 
@@ -839,6 +845,19 @@ function showManualSummary(repN, called, oc, intList, cbList) {
   var d = new Date();
   var dateStr = d.toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
   var rate = called.length > 0 ? Math.round((oc.interested / called.length) * 100) : 0;
+  // Build call notes section
+  var notedContacts = called.filter(function(c){ return c.callNote && c.callNote.trim(); });
+  var notesBlock = '';
+  if(notedContacts.length > 0) {
+    notesBlock = '━━━━━━━━━━━━━━━━━━━━\n' +
+      '📝 CALL NOTES\n' +
+      '━━━━━━━━━━━━━━━━━━━━\n';
+    notedContacts.forEach(function(c){
+      var ocLabel = {interested:'🟢',callback:'🔔',noanswer:'📵',notinterested:'🔴'};
+      notesBlock += (ocLabel[c.outcome]||'•') + ' ' + (c.name||'+91'+c.number) + ': ' + c.callNote + '\n';
+    });
+    notesBlock += '\n';
+  }
   var summary =
     '📊 Daily Call Report – ' + repN + '\n' +
     '📅 ' + dateStr + '\n\n' +
@@ -863,6 +882,7 @@ function showManualSummary(repN, called, oc, intList, cbList) {
     '🔔 CALLBACKS PENDING\n' +
     '━━━━━━━━━━━━━━━━━━━━\n' +
     cbList + '\n\n' +
+    notesBlock +
     '— Sent from - CallSmart Pro';
   document.getElementById('aiOutput').textContent = summary;
   document.getElementById('aiLoadingDiv').style.display='none';
