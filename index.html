@@ -198,6 +198,15 @@
       </div>
     </div>
 
+    <!-- Admin Tabs -->
+    <div class="admin-tabs">
+      <button class="admin-tab active" id="adminTab-users" onclick="switchAdminTab('users')">👥 Users</button>
+      <button class="admin-tab" id="adminTab-analytics" onclick="switchAdminTab('analytics')">📊 Analytics</button>
+      <button class="admin-tab" id="adminTab-leaderboard" onclick="switchAdminTab('leaderboard')">🏆 Leaderboard</button>
+    </div>
+
+    <!-- TAB: Users (existing content) -->
+    <div id="adminPanel-users">
     <div class="admin-panel-card">
       <div class="acard-header">
         <h3>👥 Registered Users</h3>
@@ -214,6 +223,47 @@
               <th>#</th><th>Name</th><th>Email</th><th>Mobile</th><th>Registered</th><th>Subscription</th><th>Status</th><th>Actions</th>
             </tr></thead>
             <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- TAB: Analytics (F1) -->
+    <div id="adminPanel-analytics" style="display:none">
+      <div class="analytics-wrap">
+        <div class="analytics-header">
+          <h3>📊 Team Analytics</h3>
+          <select class="period-select" id="analyticsPeriod" onchange="loadAnalytics(parseInt(this.value))">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </div>
+        <div class="chart-grid" id="analyticsCharts">
+          <div class="chart-card"><h4>📈 Call Volume</h4><canvas id="chartCallVolume"></canvas></div>
+          <div class="chart-card"><h4>🥧 Outcome Breakdown</h4><canvas id="chartOutcomes"></canvas></div>
+          <div class="chart-card"><h4>📊 Conversion Rate Trend</h4><canvas id="chartConversion"></canvas></div>
+          <div class="chart-card"><h4>⏱ Avg Call Duration</h4><canvas id="chartDuration"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Leaderboard (F3) -->
+    <div id="adminPanel-leaderboard" style="display:none">
+      <div class="leaderboard-card">
+        <div class="leaderboard-header">
+          <h3>🏆 Team Leaderboard</h3>
+          <select class="period-select" id="leaderboardPeriod" onchange="loadLeaderboard(parseInt(this.value))">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </div>
+        <div class="table-scroll-wrap">
+          <table class="leaderboard-table">
+            <thead><tr><th>Rank</th><th>Rep</th><th>Calls</th><th>Conv %</th><th>Avg Duration</th></tr></thead>
+            <tbody id="leaderboardBody"></tbody>
           </table>
         </div>
       </div>
@@ -285,6 +335,8 @@
       <p id="doneSummary"></p>
       <div class="done-actions">
         <button class="btn btn-ai" onclick="openAISummary()">🤖 Generate AI Summary</button>
+        <button class="btn btn-export" onclick="exportPDF()">📄 Export PDF</button>
+        <button class="btn btn-export-excel" onclick="exportExcel()">📊 Export Excel</button>
         <button class="btn btn-ghost" onclick="resetDialer()">↺ New Session</button>
       </div>
     </div>
@@ -316,6 +368,11 @@
           <div class="cname" id="currentName"></div>
           <div class="cnote" id="currentNote"></div>
         </div>
+        <!-- F7: Call Duration Timer -->
+        <div class="call-timer" title="Call duration">
+          <span class="timer-icon">⏱</span>
+          <span id="callDuration">00:00</span>
+        </div>
         <div class="call-actions">
           <div class="call-buttons">
             <a class="btn btn-call" id="btnCall" href="#" target="_blank" onclick="markCalled()">📲 WhatsApp <span class="kbd-hint"><kbd class="kbd">Enter</kbd></span></a>
@@ -340,6 +397,29 @@
         <span class="tpl-chip" onclick="openTemplates('property')">🏠 Property</span>
         <span class="tpl-chip" onclick="openTemplates('loan')">💰 Loan</span>
       </div>
+      <!-- F2: Call Notes -->
+      <div class="notes-row">
+        <span class="section-lbl">📝 Note:</span>
+        <input id="callNoteInput" placeholder="Add call notes...">
+      </div>
+      <!-- F8: Callback Scheduler (hidden by default) -->
+      <div class="callback-sched" id="callbackSchedRow" style="display:none;padding:10px 20px;border-bottom:1px solid var(--border2)">
+        <span class="section-lbl">📅 Schedule:</span>
+        <input type="date" id="cbDate">
+        <input type="time" id="cbTime" value="10:00">
+        <button class="btn btn-confirm" onclick="saveCallback()" style="font-size:10px;padding:5px 10px">💾 Save</button>
+      </div>
+      <!-- F4: Search & Filter -->
+      <div class="search-bar">
+        <input id="queueSearch" placeholder="🔍 Search name or number..." oninput="filterQueue()">
+        <select id="queueFilter" onchange="filterQueue()">
+          <option value="all">All</option>
+          <option value="pending">Pending</option>
+          <option value="done">Called</option>
+          <option value="skipped">Skipped</option>
+        </select>
+        <span class="search-count" id="searchCount"></span>
+      </div>
       <div class="queue-scroll">
         <table class="queue-table">
           <thead><tr><th>#</th><th>Mobile</th><th>Name</th><th>Outcome</th><th>Status</th><th style="width:60px">Jump</th></tr></thead>
@@ -354,7 +434,18 @@
 <!-- TEMPLATE MODAL -->
 <div class="modal-overlay" id="tplModal">
   <div class="modal">
-    <div class="modal-header"><span>💬</span><h3>WhatsApp Templates</h3><button class="modal-close" onclick="document.getElementById('tplModal').classList.remove('open')">×</button></div>
+    <div class="modal-header"><span>💬</span><h3>WhatsApp Templates</h3>
+      <!-- F10: Language Selector -->
+      <select class="tpl-lang-select" id="tplLang" onchange="onTplLangChange(this)">
+        <option value="en">🇬🇧 English</option>
+        <option value="hi">🇮🇳 हिन्दी</option>
+        <option value="ta">🇮🇳 தமிழ்</option>
+        <option value="te">🇮🇳 తెలుగు</option>
+        <option value="mr">🇮🇳 मराठी</option>
+        <option value="bn">🇮🇳 বাংলা</option>
+      </select>
+      <button class="modal-close" onclick="document.getElementById('tplModal').classList.remove('open')">×</button>
+    </div>
     <div class="modal-body"><div class="tpl-modal-list" id="tplList"></div></div>
   </div>
 </div>
@@ -506,11 +597,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
 
 <!-- ══════════════════════════════════════════
      APPLICATION JS (load order matters)
 ══════════════════════════════════════════ -->
 <script src="app.js"></script>
+<script src="templates.js"></script>
 <script src="auth.js"></script>
 <script src="dialer.js"></script>
 

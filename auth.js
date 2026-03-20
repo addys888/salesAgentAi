@@ -498,6 +498,7 @@ function enterApp() {
   document.getElementById('appContainer').style.display = 'block';
   checkSubscription();
   setTimeout(function(){ checkForActiveSession(); }, 800);
+  setTimeout(function(){ if(typeof checkTodayCallbacks === 'function') checkTodayCallbacks(); }, 1200);
 }
 
 // ════════════════════════════════════════════════════════
@@ -607,6 +608,8 @@ window.adminLogin = async function() {
       resetAdminIdleTimer();
       document.getElementById('adminPanel').addEventListener('click', resetAdminIdleTimer);
       document.getElementById('adminPanel').addEventListener('keydown', resetAdminIdleTimer);
+      // Default to users tab
+      switchAdminTab('users');
       loadMaxReps().then(function(){ window.loadUsers(); });
     } else {
       _adminAttempts++;
@@ -975,8 +978,273 @@ window.appLogout = async function() {
   if(!proceed) return;
   try { var sb=getSB(); if(sb) await sb.auth.signOut(); } catch(e) {}
   currentUser = null;
-  clearInterval(window._subTimer); // Clear subscription interval
+  clearInterval(window._subTimer);
   window.resetDialer();
   document.getElementById('appContainer').style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex';
+};
+
+// ════════════════════════════════════════════════════════
+//  ADMIN TABS
+// ════════════════════════════════════════════════════════
+window.switchAdminTab = function(tab) {
+  ['users','analytics','leaderboard'].forEach(function(t){
+    var tabBtn = document.getElementById('adminTab-'+t);
+    var panel = document.getElementById('adminPanel-'+t);
+    if(tabBtn) tabBtn.className = 'admin-tab' + (t===tab?' active':'');
+    if(panel) panel.style.display = (t===tab) ? 'block' : 'none';
+  });
+  if(tab === 'analytics') loadAnalytics();
+  if(tab === 'leaderboard') loadLeaderboard();
+};
+
+// ════════════════════════════════════════════════════════
+//  F1: ANALYTICS DASHBOARD
+// ════════════════════════════════════════════════════════
+window.loadAnalytics = async function(days) {
+  days = days || parseInt((document.getElementById('analyticsPeriod')||{}).value) || 7;
+  if(!_sb) return;
+  try {
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    var res = await _sb.from('daily_stats')
+      .select('*, user_profiles!inner(full_name, email)')
+      .gte('stat_date', cutoff.toISOString().split('T')[0])
+      .order('stat_date', {ascending: true});
+    if(res.error) {
+      // Fallback if join fails
+      var res2 = await _sb.from('daily_stats')
+        .select('*')
+        .gte('stat_date', cutoff.toISOString().split('T')[0])
+        .order('stat_date', {ascending: true});
+      if(res2.error) throw res2.error;
+      renderAnalyticsCharts(res2.data || [], days);
+      return;
+    }
+    renderAnalyticsCharts(res.data || [], days);
+  } catch(e) {
+    console.warn('Analytics load:', e.message);
+    var wrap = document.getElementById('analyticsCharts');
+    if(wrap) wrap.textContent = 'No analytics data yet. Data appears after reps complete calling sessions.';
+  }
+};
+
+function renderAnalyticsCharts(data, days) {
+  if(typeof Chart === 'undefined') {
+    var wrap = document.getElementById('analyticsCharts');
+    if(wrap) wrap.textContent = 'Chart.js not loaded. Please check your internet connection.';
+    return;
+  }
+  // Destroy existing charts
+  ['chartCallVolume','chartOutcomes','chartConversion','chartDuration'].forEach(function(id){
+    var canvas = document.getElementById(id);
+    if(canvas && canvas._chartInstance) { canvas._chartInstance.destroy(); }
+  });
+
+  // Aggregate by date
+  var byDate = {};
+  data.forEach(function(d){
+    var dt = d.stat_date;
+    if(!byDate[dt]) byDate[dt] = {called:0,skipped:0,interested:0,callback:0,noanswer:0,notinterested:0,total:0,durSum:0,durCount:0};
+    byDate[dt].called += d.called || 0;
+    byDate[dt].skipped += d.skipped || 0;
+    byDate[dt].interested += d.interested || 0;
+    byDate[dt].callback += d.callback || 0;
+    byDate[dt].noanswer += d.noanswer || 0;
+    byDate[dt].notinterested += d.notinterested || 0;
+    byDate[dt].total += d.total_leads || 0;
+    if(d.avg_call_duration > 0) { byDate[dt].durSum += d.avg_call_duration; byDate[dt].durCount++; }
+  });
+  var dates = Object.keys(byDate).sort();
+  var shortDates = dates.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
+
+  var chartColors = {
+    green: 'rgba(37,211,102,0.8)',
+    red: 'rgba(255,82,82,0.8)',
+    orange: 'rgba(255,171,64,0.8)',
+    blue: 'rgba(100,181,246,0.8)',
+    purple: 'rgba(168,85,247,0.8)',
+    gray: 'rgba(90,122,90,0.8)'
+  };
+
+  // 1. Call Volume Bar Chart
+  var ctx1 = document.getElementById('chartCallVolume');
+  if(ctx1) {
+    var c1 = new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: shortDates,
+        datasets: [{
+          label: 'Called', data: dates.map(function(d){return byDate[d].called;}),
+          backgroundColor: chartColors.green, borderRadius: 4
+        },{
+          label: 'Skipped', data: dates.map(function(d){return byDate[d].skipped;}),
+          backgroundColor: chartColors.orange, borderRadius: 4
+        }]
+      },
+      options: { responsive:true, plugins:{legend:{labels:{color:'#888',font:{size:10}}}}, scales:{x:{ticks:{color:'#888'}},y:{ticks:{color:'#888'}}} }
+    });
+    ctx1._chartInstance = c1;
+  }
+
+  // 2. Outcome Pie Chart
+  var totals = {interested:0,callback:0,noanswer:0,notinterested:0};
+  dates.forEach(function(d){ Object.keys(totals).forEach(function(k){ totals[k]+=byDate[d][k]; }); });
+  var ctx2 = document.getElementById('chartOutcomes');
+  if(ctx2) {
+    var c2 = new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: ['Interested','Callback','No Answer','Not Interested'],
+        datasets: [{ data: [totals.interested,totals.callback,totals.noanswer,totals.notinterested],
+          backgroundColor: [chartColors.green,chartColors.orange,chartColors.gray,chartColors.red] }]
+      },
+      options: { responsive:true, plugins:{legend:{position:'bottom',labels:{color:'#888',font:{size:10}}}} }
+    });
+    ctx2._chartInstance = c2;
+  }
+
+  // 3. Conversion Rate Trend
+  var ctx3 = document.getElementById('chartConversion');
+  if(ctx3) {
+    var c3 = new Chart(ctx3, {
+      type: 'line',
+      data: {
+        labels: shortDates,
+        datasets: [{
+          label: 'Conversion %',
+          data: dates.map(function(d){ var b=byDate[d]; return b.called>0 ? Math.round(b.interested/b.called*100) : 0; }),
+          borderColor: chartColors.green, backgroundColor: 'rgba(37,211,102,0.1)', fill: true, tension: 0.3
+        }]
+      },
+      options: { responsive:true, plugins:{legend:{labels:{color:'#888'}}}, scales:{x:{ticks:{color:'#888'}},y:{ticks:{color:'#888'},min:0,max:100}} }
+    });
+    ctx3._chartInstance = c3;
+  }
+
+  // 4. Avg Duration
+  var ctx4 = document.getElementById('chartDuration');
+  if(ctx4) {
+    var c4 = new Chart(ctx4, {
+      type: 'bar',
+      data: {
+        labels: shortDates,
+        datasets: [{
+          label: 'Avg Duration (sec)',
+          data: dates.map(function(d){ var b=byDate[d]; return b.durCount>0 ? Math.round(b.durSum/b.durCount) : 0; }),
+          backgroundColor: chartColors.purple, borderRadius: 4
+        }]
+      },
+      options: { responsive:true, plugins:{legend:{labels:{color:'#888'}}}, scales:{x:{ticks:{color:'#888'}},y:{ticks:{color:'#888'}}} }
+    });
+    ctx4._chartInstance = c4;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  F3: TEAM LEADERBOARD
+// ════════════════════════════════════════════════════════
+window.loadLeaderboard = async function(days) {
+  days = days || parseInt((document.getElementById('leaderboardPeriod')||{}).value) || 7;
+  if(!_sb) return;
+  var body = document.getElementById('leaderboardBody');
+  if(!body) return;
+  body.textContent = '';
+  try {
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    var res = await _sb.from('daily_stats')
+      .select('user_id, called, interested, avg_call_duration')
+      .gte('stat_date', cutoff.toISOString().split('T')[0]);
+    if(res.error) throw res.error;
+    if(!res.data || !res.data.length) {
+      body.textContent = '';
+      var emptyTr = document.createElement('tr');
+      var emptyTd = document.createElement('td');
+      emptyTd.colSpan = 5;
+      emptyTd.style.cssText = 'text-align:center;padding:20px;color:var(--muted)';
+      emptyTd.textContent = 'No data yet. Stats appear after reps complete sessions.';
+      emptyTr.appendChild(emptyTd);
+      body.appendChild(emptyTr);
+      return;
+    }
+
+    // Aggregate by user
+    var byUser = {};
+    res.data.forEach(function(d){
+      if(!byUser[d.user_id]) byUser[d.user_id] = {called:0,interested:0,durSum:0,durCount:0};
+      byUser[d.user_id].called += d.called || 0;
+      byUser[d.user_id].interested += d.interested || 0;
+      if(d.avg_call_duration > 0) { byUser[d.user_id].durSum += d.avg_call_duration; byUser[d.user_id].durCount++; }
+    });
+
+    // Get user names
+    var userIds = Object.keys(byUser);
+    var namesRes = await _sb.from('user_profiles').select('id, full_name, email').in('id', userIds);
+    var nameMap = {};
+    if(!namesRes.error && namesRes.data) {
+      namesRes.data.forEach(function(u){ nameMap[u.id] = u.full_name || u.email || 'Unknown'; });
+    }
+
+    // Sort by calls
+    var sorted = userIds.map(function(uid){
+      var u = byUser[uid];
+      return { id:uid, name: nameMap[uid]||'Rep', called: u.called, interested: u.interested,
+        rate: u.called > 0 ? Math.round(u.interested/u.called*100) : 0,
+        avgDur: u.durCount > 0 ? Math.round(u.durSum/u.durCount) : 0 };
+    }).sort(function(a,b){ return b.called - a.called; });
+
+    var maxCalls = sorted[0] ? sorted[0].called : 1;
+    var medals = ['gold','silver','bronze'];
+    var medalEmojis = ['🥇','🥈','🥉'];
+
+    sorted.forEach(function(rep, i){
+      var tr = document.createElement('tr');
+      // Rank
+      var tdRank = document.createElement('td');
+      var rankSpan = document.createElement('span');
+      rankSpan.className = 'lb-rank' + (i < 3 ? ' '+medals[i] : '');
+      rankSpan.textContent = i < 3 ? medalEmojis[i] : '#'+(i+1);
+      tdRank.appendChild(rankSpan);
+      tr.appendChild(tdRank);
+      // Name
+      var tdName = document.createElement('td');
+      tdName.style.fontWeight = '600';
+      tdName.textContent = rep.name;
+      tr.appendChild(tdName);
+      // Calls with bar
+      var tdCalls = document.createElement('td');
+      tdCalls.textContent = rep.called;
+      var bar = document.createElement('div');
+      bar.className = 'lb-bar';
+      var fill = document.createElement('div');
+      fill.className = 'lb-bar-fill';
+      fill.style.width = Math.round(rep.called/maxCalls*100)+'%';
+      bar.appendChild(fill);
+      tdCalls.appendChild(bar);
+      tr.appendChild(tdCalls);
+      // Conversion
+      var tdRate = document.createElement('td');
+      tdRate.textContent = rep.rate + '%';
+      tdRate.style.color = rep.rate >= 20 ? 'var(--green)' : rep.rate >= 10 ? 'var(--warn)' : 'var(--danger)';
+      tr.appendChild(tdRate);
+      // Avg Duration
+      var tdDur = document.createElement('td');
+      tdDur.textContent = rep.avgDur > 0 ? Math.floor(rep.avgDur/60)+'m '+rep.avgDur%60+'s' : '-';
+      tdDur.style.color = 'var(--muted)';
+      tr.appendChild(tdDur);
+
+      body.appendChild(tr);
+    });
+  } catch(e) {
+    console.warn('Leaderboard load:', e.message);
+    body.textContent = '';
+    var errTr = document.createElement('tr');
+    var errTd = document.createElement('td');
+    errTd.colSpan = 5;
+    errTd.style.cssText = 'text-align:center;padding:20px;color:var(--muted)';
+    errTd.textContent = 'Could not load leaderboard data.';
+    errTr.appendChild(errTd);
+    body.appendChild(errTr);
+  }
 };
