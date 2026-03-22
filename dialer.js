@@ -883,7 +883,7 @@ function showManualSummary(repN, called, oc, intList, cbList) {
     '━━━━━━━━━━━━━━━━━━━━\n' +
     cbList + '\n\n' +
     notesBlock +
-    '— Sent from - CallSmart Pro';
+    '— Sent from - DialKaro by Zentily';
   document.getElementById('aiOutput').textContent = summary;
   document.getElementById('aiLoadingDiv').style.display='none';
   document.getElementById('aiOutput').style.display='block';
