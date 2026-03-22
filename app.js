@@ -57,7 +57,7 @@ function showToast(msg, isError) {
   if (!t) {
     t = document.createElement('div');
     t.id = 'appToast';
-    t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:30px;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;z-index:99999;transition:opacity .4s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4)";
+    t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:30px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;z-index:99999;transition:opacity .4s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4)";
     document.body.appendChild(t);
   }
   t.style.background = isError ? 'var(--danger)' : 'var(--green)';

@@ -628,7 +628,7 @@ function showResumeModal(session) {
     var card = document.createElement('div');
     card.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;text-align:center';
     var valDiv = document.createElement('div');
-    valDiv.style.cssText = 'font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:' + stat.color;
+    valDiv.style.cssText = 'font-family:Inter,sans-serif;font-size:22px;font-weight:800;color:' + stat.color;
     valDiv.textContent = stat.val;
     var lblDiv = document.createElement('div');
     lblDiv.style.cssText = 'font-size:10px;color:var(--muted);margin-top:2px';
