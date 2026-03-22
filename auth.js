@@ -349,16 +349,28 @@ window.userRegister = async function() {
       showMsg('registerMsg','✅ Account created! Entering app...','success');
       setTimeout(function(){ enterApp(); }, 800);
     } else {
+      // Email confirmation might be on — try auto-login first
       if(user) {
         try {
           await sb.from('user_profiles').upsert({
             id: user.id, full_name: name, email: email,
-            phone_number: phone, status: 'pending'
+            phone_number: phone, status: 'active'
           }, { onConflict: 'id' });
         } catch(pe) {}
       }
-      showMsg('registerMsg','✅ Account created! Check ' + email + ' for a confirmation link, then come back and Login.','success');
-      setTimeout(function(){ switchTab('login'); }, 3500);
+      // Attempt immediate login (works when email confirmation is OFF)
+      try {
+        var autoLogin = await sb.auth.signInWithPassword({ email: email, password: pass });
+        if(!autoLogin.error && autoLogin.data && autoLogin.data.user) {
+          currentUser = autoLogin.data.user;
+          showMsg('registerMsg','✅ Account created! Entering app...','success');
+          setTimeout(function(){ enterApp(); }, 800);
+          return;
+        }
+      } catch(al) {}
+      // If auto-login failed, email confirmation is probably still on
+      showMsg('registerMsg','✅ Account created! Your admin will activate your account shortly.','success');
+      setTimeout(function(){ switchTab('login'); }, 3000);
     }
 
   } catch(e) {
