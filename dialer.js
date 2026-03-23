@@ -568,10 +568,12 @@ window.resetDialer = function() {
   // Reset international toggle
   var intlCb = document.getElementById('intlToggle');
   if(intlCb) intlCb.checked = false;
+  var intlTrack = document.getElementById('intlTrack');
+  if(intlTrack) intlTrack.style.background = '';
   var intlSlider = document.getElementById('intlSlider');
   if(intlSlider) intlSlider.style.transform = '';
   var intlLabel = document.getElementById('intlLabel');
-  if(intlLabel) intlLabel.textContent = 'India only';
+  if(intlLabel) { intlLabel.textContent = 'India only'; intlLabel.style.color = ''; }
   setStatus('idle','Idle');
 };
 

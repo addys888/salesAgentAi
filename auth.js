@@ -200,20 +200,20 @@ window.addEventListener('DOMContentLoaded', async function() {
   var intlCb = document.getElementById('intlToggle');
   if(intlCb) {
     intlCb.addEventListener('change', function() {
-      var slider = document.getElementById('intlSlider');
-      var label = document.getElementById('intlLabel');
-      var track = this.previousElementSibling;
-      if(this.checked) {
-        slider.style.transform = 'translateX(18px)';
-        track.style.background = 'var(--green)';
-        label.textContent = 'All countries';
-        label.style.color = 'var(--green)';
-      } else {
-        slider.style.transform = '';
-        track.style.background = 'var(--border2)';
-        label.textContent = 'India only';
-        label.style.color = 'var(--muted)';
-      }
+      try {
+        var slider = document.getElementById('intlSlider');
+        var label = document.getElementById('intlLabel');
+        var track = document.getElementById('intlTrack');
+        if(this.checked) {
+          if(slider) slider.style.transform = 'translateX(18px)';
+          if(track) track.style.background = 'var(--green)';
+          if(label) { label.textContent = 'All countries'; label.style.color = 'var(--green)'; }
+        } else {
+          if(slider) slider.style.transform = '';
+          if(track) track.style.background = 'var(--border2)';
+          if(label) { label.textContent = 'India only'; label.style.color = 'var(--muted)'; }
+        }
+      } catch(e) { console.warn('Toggle style error:', e); }
     });
   }
 
