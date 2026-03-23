@@ -193,7 +193,13 @@ function parseCSV(text) {
 }
 
 function parseRows(rows) {
-  if(rows.length < 2){ appAlert('File appears empty.', '📄'); return; }
+  if(rows.length < 2){
+    appAlert('File appears empty or invalid. Please upload a different file.', '📄');
+    document.getElementById('configBar').style.display = 'none';
+    document.getElementById('uploadZone').style.display = 'block';
+    var fi = document.getElementById('fileInput'); if(fi) fi.value = '';
+    return;
+  }
   var headers = rows[0].map(String);
   window._rawRows = rows.slice(1);
 
@@ -224,11 +230,27 @@ function parseRows(rows) {
   document.getElementById('configBar').style.display = 'block';
 }
 
+var _intlMode = false;
+
 function cleanNumber(raw) {
-  var n = String(raw).replace(/\D/g,'');
-  if(n.startsWith('91') && n.length===12) n = n.slice(2);
-  if(n.startsWith('0') && n.length===11) n = n.slice(1);
-  if(n.length===10 && /^[6-9]/.test(n)) return n;
+  var n = String(raw).replace(/[^\d+]/g,'').replace(/^\+/,'');
+  // Indian number normalization
+  if(n.startsWith('91') && n.length===12) { var in10 = n.slice(2); if(/^[6-9]/.test(in10)) return { num: in10, code: '91', display: '+91 '+in10 }; }
+  if(n.startsWith('0') && n.length===11) { var in10b = n.slice(1); if(/^[6-9]/.test(in10b)) return { num: in10b, code: '91', display: '+91 '+in10b }; }
+  if(n.length===10 && /^[6-9]/.test(n)) return { num: n, code: '91', display: '+91 '+n };
+  // International mode
+  if(_intlMode && n.length >= 7 && n.length <= 15) {
+    // Try to detect country code for common countries
+    var code = ''; var local = n;
+    if(n.startsWith('1') && n.length === 11) { code = '1'; local = n.slice(1); } // US/Canada
+    else if(n.startsWith('44') && n.length >= 11) { code = '44'; local = n.slice(2); } // UK
+    else if(n.startsWith('971') && n.length >= 11) { code = '971'; local = n.slice(3); } // UAE
+    else if(n.startsWith('65') && n.length >= 9) { code = '65'; local = n.slice(2); } // Singapore
+    else if(n.startsWith('61') && n.length >= 10) { code = '61'; local = n.slice(2); } // Australia
+    else { code = ''; local = n; } // Unknown country — keep full number
+    var displayCode = code || '';
+    return { num: n, code: displayCode, display: '+'+n, isIntl: true };
+  }
   return null;
 }
 
@@ -241,12 +263,28 @@ window.startQueue = function() {
   var ocVal = document.getElementById('colNote').value;
   var nc = ncVal !== '' ? parseInt(ncVal) : null;
   var oc = ocVal !== '' ? parseInt(ocVal) : null;
+  // Check international toggle
+  var intlCb = document.getElementById('intlToggle');
+  _intlMode = intlCb ? intlCb.checked : false;
+  var totalRows = window._rawRows ? window._rawRows.length : 0;
+  var skippedNumbers = 0;
   contacts = [];
   window._rawRows.forEach(function(row){
-    var num = cleanNumber(row[pc]);
-    if(num) contacts.push({ number:num, name: nc!=null?(row[nc]||''):'', note: oc!=null?(row[oc]||''):'', status:'pending', outcome:'', callNote:'', duration:0 });
+    var cleaned = cleanNumber(row[pc]);
+    if(cleaned) {
+      contacts.push({ number:cleaned.num, countryCode:cleaned.code||'91', displayNum:cleaned.display, name: nc!=null?(row[nc]||''):'', note: oc!=null?(row[oc]||''):'', status:'pending', outcome:'', callNote:'', duration:0, isIntl:cleaned.isIntl||false });
+    } else {
+      skippedNumbers++;
+    }
   });
-  if(!contacts.length){ appAlert('No valid Indian mobile numbers found.', '📵'); return; }
+  if(!contacts.length){
+    var modeText = _intlMode ? 'valid phone numbers' : 'valid Indian mobile numbers (starting with 6-9)';
+    appAlert('No ' + modeText + ' found in ' + totalRows + ' rows.\n\nPlease check:\n• Correct Phone Column selected\n• Numbers are not empty or too short' + (_intlMode ? '' : '\n• Enable "International Numbers" for non-Indian numbers'), '📵');
+    return;
+  }
+  if(skippedNumbers > 0) {
+    showToast('⚠️ ' + skippedNumbers + ' invalid number' + (skippedNumbers>1?'s':'') + ' skipped, ' + contacts.length + ' loaded');
+  }
   // F9: Deduplicate
   contacts = deduplicateContacts(contacts);
   // F6: DND check
@@ -275,7 +313,7 @@ function buildTable() {
     // Number
     var tdNum = document.createElement('td');
     tdNum.className = 'mono';
-    tdNum.textContent = '+91 '+c.number;
+    tdNum.textContent = c.displayNum || ('+91 '+c.number);
     tr.appendChild(tdNum);
 
     // Name
@@ -385,11 +423,12 @@ function showContact(i) {
   var anyPending = contacts.some(function(c){ return c.status === 'pending'; });
   if(!anyPending){ allDone(); return; }
   var c = contacts[i]; c.status = 'current'; updateRowStatus(i,'current');
-  document.getElementById('currentNumber').textContent = '+91 '+c.number;
+  document.getElementById('currentNumber').textContent = c.displayNum || ('+91 '+c.number);
   document.getElementById('currentName').textContent = c.name||'Unknown Contact';
   document.getElementById('currentNote').textContent = c.note||'';
-  document.getElementById('btnCall').href = 'https://wa.me/91'+c.number;
-  document.getElementById('btnPhone').href = 'tel:+91'+c.number;
+  var waNum = (c.countryCode||'91') + (c.countryCode ? c.number.replace(new RegExp('^'+c.countryCode),'') : c.number);
+  document.getElementById('btnCall').href = 'https://wa.me/' + waNum;
+  document.getElementById('btnPhone').href = 'tel:+' + (c.countryCode||'91') + c.number;
   var emojis = ['\u{1F464}','\u{1F9D1}','\u{1F469}','\u{1F468}','\u{1F64B}','\u{1F91D}','\u{1F4BC}','\u{1F9D1}\u200D\u{1F4BC}'];
   document.getElementById('avEl').textContent = emojis[i%8];
   // F2: Load saved note if exists
@@ -507,15 +546,32 @@ function allDone() {
   saveDailyStats(); // F1: Save stats for analytics
 }
 
+window.confirmReset = function() {
+  var done = contacts.filter(function(c){ return c.status==='done'; }).length;
+  var total = contacts.length;
+  var msg = 'Reset this session?';
+  if(done > 0) msg += '\n\nYou have called ' + done + ' of ' + total + ' leads.\nUnsaved progress will be lost.';
+  if(!confirm(msg)) return;
+  resetDialer();
+};
+
 window.resetDialer = function() {
   contacts=[]; currentIndex=0; calledCount=0; skippedCount=0;
   _activeSessionId = null; _isDirty = false; jumpReturnIndex = -1;
+  _intlMode = false;
   clearTimeout(_idleTimer);
   stopCallTimer(); // F7
   removeDNDBanner(); // F6
   ['dialerPanel','statsBar','doneBanner','configBar'].forEach(function(id){ document.getElementById(id).style.display='none'; });
   document.getElementById('uploadZone').style.display='block';
   var fi=document.getElementById('fileInput'); if(fi) fi.value='';
+  // Reset international toggle
+  var intlCb = document.getElementById('intlToggle');
+  if(intlCb) intlCb.checked = false;
+  var intlSlider = document.getElementById('intlSlider');
+  if(intlSlider) intlSlider.style.transform = '';
+  var intlLabel = document.getElementById('intlLabel');
+  if(intlLabel) intlLabel.textContent = 'India only';
   setStatus('idle','Idle');
 };
 
@@ -748,7 +804,8 @@ window.openTemplates = function() {
     var key=entry[0], tpl=entry[1];
     var textFn = tpl.text[lang] || tpl.text['en'];
     var msg = textFn(c.name, repN);
-    var waUrl = 'https://wa.me/91'+(c.number||'')+'?text='+encodeURIComponent(msg);
+    var waNum = (c.countryCode||'91') + (c.countryCode ? c.number.replace(new RegExp('^'+(c.countryCode||'91')),'') : c.number);
+    var waUrl = 'https://wa.me/'+waNum+'?text='+encodeURIComponent(msg);
 
     var div = document.createElement('div');
     div.className = 'tpl-item';

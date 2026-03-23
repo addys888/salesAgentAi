@@ -323,8 +323,22 @@
         <div class="config-field"><label>👤 Name Column</label><select id="colName"></select></div>
         <div class="config-field"><label>📝 Note Column</label><select id="colNote"></select></div>
         <div class="config-field">
+          <label>🌐 International Numbers</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <label class="toggle-switch" style="position:relative;display:inline-block;width:38px;height:20px;cursor:pointer">
+              <input type="checkbox" id="intlToggle" style="opacity:0;width:0;height:0">
+              <span style="position:absolute;inset:0;background:var(--border2);border-radius:20px;transition:.3s"></span>
+              <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s" id="intlSlider"></span>
+            </label>
+            <span style="font-size:10px;color:var(--muted)" id="intlLabel">India only</span>
+          </div>
+        </div>
+        <div class="config-field">
           <label>&nbsp;</label>
-          <button class="btn btn-confirm" onclick="startQueue()">▶ Start Dialing</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-confirm" onclick="startQueue()">▶ Start Dialing</button>
+            <button class="btn" onclick="resetDialer()" style="background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--border2);font-size:11px">↺ Change File</button>
+          </div>
         </div>
       </div>
     </div>
@@ -354,7 +368,7 @@
         <h3>Current Contact</h3>
         <button class="btn btn-ai" onclick="openAISummary()" style="font-size:10px;padding:5px 10px">🤖 AI Summary</button>
         <button class="btn btn-skip" onclick="skipContact()" style="font-size:10px;padding:5px 10px">⏭ Skip <span class="kbd-hint"><kbd class="kbd">S</kbd></span></button>
-        <button class="btn" onclick="resetDialer()" style="background:rgba(255,82,82,.08);color:var(--danger);border:1px solid rgba(255,82,82,.2);font-size:10px;padding:5px 10px">✕ Reset</button>
+        <button class="btn" onclick="confirmReset()" style="background:rgba(255,82,82,.08);color:var(--danger);border:1px solid rgba(255,82,82,.2);font-size:10px;padding:5px 10px">✕ Reset</button>
       </div>
       <div class="progress-wrap">
         <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
