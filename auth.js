@@ -196,6 +196,27 @@ window.addEventListener('DOMContentLoaded', async function() {
   uz.addEventListener('click', function(e){ if(e.target.tagName !== 'BUTTON') fi.click(); });
   fi.addEventListener('change', function(e){ handleFile(e.target.files[0]); });
 
+  // International number toggle
+  var intlCb = document.getElementById('intlToggle');
+  if(intlCb) {
+    intlCb.addEventListener('change', function() {
+      var slider = document.getElementById('intlSlider');
+      var label = document.getElementById('intlLabel');
+      var track = this.previousElementSibling;
+      if(this.checked) {
+        slider.style.transform = 'translateX(18px)';
+        track.style.background = 'var(--green)';
+        label.textContent = 'All countries';
+        label.style.color = 'var(--green)';
+      } else {
+        slider.style.transform = '';
+        track.style.background = 'var(--border2)';
+        label.textContent = 'India only';
+        label.style.color = 'var(--muted)';
+      }
+    });
+  }
+
   // Modal backdrop close
   ['tplModal','aiModal'].forEach(function(id){
     document.getElementById(id).addEventListener('click', function(e){ if(e.target===e.currentTarget) e.target.classList.remove('open'); });
