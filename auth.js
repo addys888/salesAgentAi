@@ -22,7 +22,7 @@ const APP_CONFIG = {
   uploadTitle:    'Upload your lead list to begin',
   uploadSubtitle: 'Accepts Excel or CSV · Indian mobile numbers auto-detected',
   sessionDoneTitle: 'Session Done! 🎯',
-  footerNote:     '🔒 Powered by Zentily · Enterprise-grade security · Works on any device',
+  footerNote:     '🔒 Powered by CelerApps · Enterprise-grade security · Works on any device',
   userCardTitle:  'Sales Rep',
   userCardDesc:   'Login to your dialer, upload leads and start calling',
   adminCardTitle: 'Manager',
