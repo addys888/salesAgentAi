@@ -1142,7 +1142,7 @@ window.exportPDF = function() {
   doc.setFontSize(12);
   doc.text('Contact Details', 14, y); y += 8;
   doc.setFontSize(8);
-  doc.text('#', 14, y); doc.text('Number', 24, y); doc.text('Name', 65, y); doc.text('Outcome', 110, y); doc.text('Note', 150, y);
+  doc.text('#', 14, y); doc.text('Number', 24, y); doc.text('Name', 65, y); doc.text('Outcome', 105, y); doc.text('Duration', 135, y); doc.text('Note', 155, y);
   y += 5;
 
   contacts.forEach(function(c, i) {
@@ -1150,10 +1150,16 @@ window.exportPDF = function() {
     doc.setTextColor(c.status === 'done' ? 0 : 150);
     doc.text(String(i+1), 14, y);
     doc.text('+91 ' + c.number, 24, y);
-    doc.text((c.name || '-').substring(0, 20), 65, y);
+    doc.text((c.name || '-').substring(0, 18), 65, y);
     var ocLabel = {interested:'Interested',callback:'Callback',noanswer:'No Answer',notinterested:'Not Int.',skipped:'Skipped'};
-    doc.text(ocLabel[c.outcome] || '-', 110, y);
-    doc.text((c.callNote || '-').substring(0, 25), 150, y);
+    doc.text(ocLabel[c.outcome] || '-', 105, y);
+    // Duration formatted as m:ss
+    var durStr = '-';
+    if(c.duration && c.duration > 0) {
+      durStr = Math.floor(c.duration/60) + ':' + String(c.duration%60).padStart(2,'0');
+    }
+    doc.text(durStr, 135, y);
+    doc.text((c.callNote || '-').substring(0, 22), 155, y);
     y += 5;
   });
 
@@ -1166,9 +1172,10 @@ window.exportExcel = function() {
     appAlert('Excel library not loaded.', '📊');
     return;
   }
-  var data = [['#', 'Number', 'Name', 'Outcome', 'Call Note', 'Duration (sec)', 'Status']];
+  var data = [['#', 'Number', 'Name', 'Outcome', 'Duration', 'Duration (sec)', 'Call Note', 'Status']];
   contacts.forEach(function(c, i) {
-    data.push([i+1, '+91 ' + c.number, c.name || '', c.outcome || '', c.callNote || '', c.duration || 0, c.status]);
+    var durFormatted = (c.duration && c.duration > 0) ? Math.floor(c.duration/60) + ':' + String(c.duration%60).padStart(2,'0') : '-';
+    data.push([i+1, '+91 ' + c.number, c.name || '', c.outcome || '', durFormatted, c.duration || 0, c.callNote || '', c.status]);
   });
 
   var ws = XLSX.utils.aoa_to_sheet(data);
