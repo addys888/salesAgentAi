@@ -192,6 +192,58 @@ async function loadTenantConfig() {
 }
 
 // ════════════════════════════════════════════════════════
+//  TENANT SUBSCRIPTION CHECK
+// ════════════════════════════════════════════════════════
+function checkTenantSubscription(tenant) {
+  if(!tenant || !tenant.subscription_end) return { blocked: false, warning: false, daysLeft: null };
+  var now = new Date(); now.setHours(0,0,0,0);
+  var subEnd = new Date(tenant.subscription_end); subEnd.setHours(0,0,0,0);
+  var diff = Math.ceil((subEnd - now) / 86400000);
+  if(diff <= 0) {
+    return {
+      blocked: true, warning: false, daysLeft: diff,
+      message: 'Your organisation\'s subscription expired on ' + subEnd.toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'}) + '. Please contact your administrator to renew.'
+    };
+  }
+  if(diff <= 7) {
+    return {
+      blocked: false, warning: true, daysLeft: diff,
+      message: 'Your subscription expires in ' + diff + ' day' + (diff === 1 ? '' : 's') + '. Please renew to avoid interruption.'
+    };
+  }
+  return { blocked: false, warning: false, daysLeft: diff };
+}
+
+function showSubWarningBanner(message) {
+  var existing = document.getElementById('tenantSubBanner');
+  if(existing) existing.remove();
+  var banner = document.createElement('div');
+  banner.id = 'tenantSubBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 16px;font-size:12px;font-weight:600;text-align:center;font-family:Inter,sans-serif;';
+  banner.style.background = 'linear-gradient(135deg,rgba(255,171,64,.95),rgba(255,140,0,.95))';
+  banner.style.color = '#1a1a1a';
+  banner.innerHTML = '⚠️ ' + message + ' <a href="mailto:support@celerapps.com" style="color:#1a1a1a;text-decoration:underline;font-weight:800;margin-left:8px">Contact Support</a>' +
+    '<span onclick="this.parentElement.remove()" style="position:absolute;right:12px;top:8px;cursor:pointer;font-size:16px;opacity:.6">✕</span>';
+  document.body.prepend(banner);
+}
+
+function showSubBlockedOverlay(message) {
+  var existing = document.getElementById('tenantSubBlocked');
+  if(existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'tenantSubBlocked';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;';
+  overlay.innerHTML = '<div style="text-align:center;max-width:400px;padding:40px">' +
+    '<div style="font-size:64px;margin-bottom:20px">🔒</div>' +
+    '<h2 style="color:var(--danger,#ff5252);font-size:22px;margin-bottom:12px">Subscription Expired</h2>' +
+    '<p style="color:rgba(255,255,255,.7);font-size:14px;line-height:1.6;margin-bottom:24px">' + message + '</p>' +
+    '<a href="mailto:support@celerapps.com" style="display:inline-block;background:rgba(255,171,64,.2);color:#ffab40;border:1px solid rgba(255,171,64,.4);padding:12px 28px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none">📧 Contact CelerApps Support</a>' +
+    '<br><button onclick="location.reload()" style="margin-top:16px;background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);padding:8px 20px;border-radius:8px;cursor:pointer;font-size:11px;font-family:Inter,sans-serif">← Back to Login</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════════════════
 var currentUser = null;
@@ -408,6 +460,14 @@ window.userRegister = async function() {
       if(tcRes.data.landing_title)  APP_CONFIG.landingTitle = tcRes.data.landing_title;
       if(tcRes.data.landing_tagline) APP_CONFIG.landingTagline = tcRes.data.landing_tagline;
       applyAppConfig();
+
+      // Block registration if tenant subscription expired
+      var subCheck = checkTenantSubscription(tcRes.data);
+      if(subCheck.blocked) {
+        showMsg('registerMsg','🔒 Registration is closed — your organisation\'s subscription has expired. Contact your administrator.');
+        btn.disabled = false; btn.textContent = 'Create Account →';
+        return;
+      }
     } catch(tcErr) {
       showMsg('registerMsg','❌ Team verification failed. Please try again.');
       btn.disabled = false; btn.textContent = 'Create Account →';
@@ -566,6 +626,18 @@ window.userLogin = async function() {
       }
     } catch(pe) { console.warn('Profile check on login (non-fatal):', pe); }
 
+    // Check tenant-level subscription (blocks entire org)
+    if(currentTenant && currentTenant.subscription_end) {
+      var tSubCheck = checkTenantSubscription(currentTenant);
+      if(tSubCheck.blocked) {
+        await sb.auth.signOut();
+        currentUser = null;
+        showMsg('loginMsg','🔒 ' + tSubCheck.message);
+        btn.disabled = false; btn.textContent = 'Login →';
+        return;
+      }
+    }
+
     showMsg('loginMsg','✅ Welcome back! Loading...','success');
     setTimeout(function(){ enterApp(); }, 600);
   } catch(e) {
@@ -686,6 +758,15 @@ async function loadUserTenant() {
     if(tenRes.data.landing_title)  APP_CONFIG.landingTitle = tenRes.data.landing_title;
     if(tenRes.data.landing_tagline) APP_CONFIG.landingTagline = tenRes.data.landing_tagline;
     applyAppConfig();
+
+    // Check tenant subscription for reps
+    var subCheck = checkTenantSubscription(tenRes.data);
+    if(subCheck.blocked) {
+      showSubBlockedOverlay(subCheck.message);
+      return;
+    }
+    if(subCheck.warning) showSubWarningBanner(subCheck.message);
+
   } catch(e) { console.warn('[Tenant] User tenant load:', e.message); }
 }
 
@@ -812,11 +893,18 @@ window.adminLogin = async function() {
     }
 
     if(validAdmin || validSuper) {
+      // Check tenant subscription before allowing access
+      var subCheck = checkTenantSubscription(currentTenant);
+      if(subCheck.blocked) {
+        showMsg('adminMsg','🔒 ' + subCheck.message);
+        return;
+      }
       _adminAttempts = 0;
       isAdminSession = true;
       isSuperAdmin = validSuper;
       document.getElementById('adminAuthScreen').classList.remove('visible');
       document.getElementById('adminPanel').style.display = 'block';
+      if(subCheck.warning) showSubWarningBanner(subCheck.message);
       var badge = document.getElementById('superAdminBadge');
       if(badge) badge.style.display = isSuperAdmin ? 'inline-flex' : 'none';
       resetAdminIdleTimer();
