@@ -972,7 +972,7 @@ function showManualSummary(repN, called, oc, intList, cbList) {
     '━━━━━━━━━━━━━━━━━━━━\n' +
     cbList + '\n\n' +
     notesBlock +
-    '— Sent from - DialKaro by Zentily';
+    '— Sent from - DialKaro by CelerApps';
   document.getElementById('aiOutput').textContent = summary;
   document.getElementById('aiLoadingDiv').style.display='none';
   document.getElementById('aiOutput').style.display='block';

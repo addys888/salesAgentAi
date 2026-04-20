@@ -11,7 +11,7 @@ const APP_CONFIG = {
   appEmoji:       '☎️',
   landingTitle:   'DialKaro',
   landingTagline: 'Your team\'s calling command centre',
-  appMetaDesc:    'DialKaro by Zentily — India\'s smartest sales dialer for outbound teams',
+  appMetaDesc:    'DialKaro by CelerApps — India\'s smartest sales dialer for outbound teams',
   userAuthTitle:  'Rep Login',
   userAuthSub:    'Sales Representative Portal · Secure Access',
   adminAuthTitle: 'Manager Console',
