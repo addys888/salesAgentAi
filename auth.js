@@ -130,32 +130,44 @@ async function loadTenantConfig() {
   if(!_sb) return;
   try {
     var hostname = window.location.hostname;
-    // Skip tenant lookup for pure localhost development
-    if(hostname === 'localhost' || hostname === '127.0.0.1') {
-      console.log('[Tenant] localhost — using default config');
-      return;
-    }
-    // Also try GitHub Pages URLs like addys888.github.io
-    var res = await _sb.from('tenants')
-      .select('*')
-      .eq('hostname', hostname)
-      .eq('is_active', true)
-      .single();
-    if(res.error || !res.data) {
-      // Fallback: try to find by slug from first part of hostname
-      var slugGuess = hostname.split('.')[0];
-      var res2 = await _sb.from('tenants')
+    // For localhost and GitHub Pages, use the default 'dialkaro' tenant
+    var isLocal = (hostname === 'localhost' || hostname === '127.0.0.1');
+    var isGitHub = hostname.endsWith('.github.io');
+
+    var res;
+    if(isLocal || isGitHub) {
+      // Load default tenant for dev/demo
+      res = await _sb.from('tenants')
         .select('*')
-        .eq('slug', slugGuess)
+        .eq('slug', 'dialkaro')
         .eq('is_active', true)
         .single();
-      if(!res2.error && res2.data) {
-        res = res2;
-      } else {
-        console.log('[Tenant] No tenant found for', hostname, '— using defaults');
-        return;
+    } else {
+      // Production: match by hostname
+      res = await _sb.from('tenants')
+        .select('*')
+        .eq('hostname', hostname)
+        .eq('is_active', true)
+        .single();
+      if(res.error || !res.data) {
+        // Fallback: try slug from first part of hostname (e.g. 'dialkaro' from 'dialkaro.celerapps.com')
+        var slugGuess = hostname.split('.')[0];
+        var res2 = await _sb.from('tenants')
+          .select('*')
+          .eq('slug', slugGuess)
+          .eq('is_active', true)
+          .single();
+        if(!res2.error && res2.data) {
+          res = res2;
+        }
       }
     }
+
+    if(!res || res.error || !res.data) {
+      console.log('[Tenant] No tenant found for', hostname, '— using defaults');
+      return;
+    }
+
     currentTenant = res.data;
     // Apply tenant overrides
     ADMIN_HASH = res.data.admin_hash || ADMIN_HASH;
