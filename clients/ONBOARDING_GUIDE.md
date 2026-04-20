@@ -1,174 +1,53 @@
 # 🚀 DialKaro — Client Onboarding Guide
 
-> **Version**: 1.0 · **Last Updated**: April 2026 · **By CelerApps**
+> **Version**: 2.0 · **Last Updated**: April 2026 · **By CelerApps**
 >
-> This guide walks you through onboarding a new client on DialKaro from scratch.
-> **Estimated time**: 10 minutes per client.
+> Two paths to onboard: **Super Admin Panel** (recommended) or **Manual SQL**.
+> Super Admin Panel requires no SQL and takes ~2 minutes.
 
 ---
 
-## 📋 Pre-Requisites
+## 🏆 Option A: Super Admin Panel (Recommended)
 
-Before you begin, ensure you have:
+### Step 1: Access the Panel
+1. Open [dialkaro.celerapps.com](https://dialkaro.celerapps.com)
+2. **Triple-click** the footer text ("🔒 Powered by CelerApps...")
+3. Enter the CelerApps platform password
+4. You're in the CelerApps Console
 
-- [ ] Access to **Supabase Dashboard** → SQL Editor
-- [ ] Access to the **salesAgentAi** GitHub repo
-- [ ] A terminal with `shasum` (macOS/Linux)
-- [ ] The client's company name, desired branding, and preferred passwords
+### Step 2: Add the Tenant
+1. Click the **➕ Add Tenant** tab
+2. Fill in the form:
 
----
+| Field | What to Enter | Example |
+|-------|--------------|---------|
+| 🏢 Company Name | Client's company | Skyline Realty |
+| 📝 Subtitle | Tagline under header | Build · Sell · Grow |
+| 😀 Emoji | Header icon | 🏠 |
+| 🎨 Color | Brand hex color | #E67E22 |
+| 💬 Tagline | Landing page text | Smart calling for real estate |
+| 🏷 Team Code | Unique, UPPERCASE | SKYLINE2026 |
+| 👥 Max Reps | Rep limit | 15 |
+| 🔑 Admin Password | For client's manager | skyline@admin2026 |
+| 🔐 Super Admin Pass | For you (CelerApps) | skyline@super2026 |
+| 📅 Subscription End | Optional expiry date | 2027-04-21 |
 
-## Step 1: Gather Client Information
+3. Click **🚀 Create Tenant**
+4. Done! Passwords are auto-hashed with SHA-256.
 
-Collect the following from the client (or decide for them):
+### Step 3: Manage After Creation
+Switch to the **🏢 Tenants** tab to:
+- ✏️ Edit **Team Code** — click the field, change, auto-saves
+- ✏️ Edit **Max Reps** — click the number, change, auto-saves
+- 📅 Set **Subscription** — pick a date, auto-saves
+- 🔴 **Disable/Enable** — click the button, confirms with dialog
 
-| # | Field | Example | Notes |
-|---|-------|---------|-------|
-| 1 | **Company Name** | Skyline Realty | Used in header |
-| 2 | **Subtitle** | Build · Sell · Grow | Shown below company name |
-| 3 | **Emoji/Icon** | 🏠 | Header icon |
-| 4 | **Tagline** | Smart calling for real estate teams | Landing page |
-| 5 | **Brand Color** | `#E67E22` | Primary accent *(optional)* |
-| 6 | **Team Code** | `SKYLINE2026` | Unique, UPPERCASE, memorable |
-| 7 | **Max Reps** | 15 | How many sales reps allowed |
-| 8 | **Admin Password** | `skyline@admin2026` | For the client's manager |
-| 9 | **Super Admin Pass** | `skyline@super2026` | For you (CelerApps) only |
+### Step 4: Verify
+- [ ] Admin login works with the password you set
+- [ ] Rep registration works with the team code
+- [ ] Header shows client's company name
 
-> **💡 Naming Conventions**
-> - **Slug**: Lowercase, no spaces → `skylinerealty`
-> - **Team Code**: UPPERCASE, memorable → `SKYLINE2026`
-> - **Passwords**: Minimum 10 chars, include special chars
-
----
-
-## Step 2: Generate Password Hashes
-
-Run these commands in your terminal:
-
-```bash
-# Admin password hash
-echo -n 'skyline@admin2026' | shasum -a 256 | awk '{print $1}'
-# Output: a1b2c3d4e5f6... (copy this)
-
-# Super admin password hash
-echo -n 'skyline@super2026' | shasum -a 256 | awk '{print $1}'
-# Output: f6e5d4c3b2a1... (copy this)
-```
-
-> ⚠️ **Important**: Use `echo -n` (no newline) — without `-n` the hash will be wrong.
-
----
-
-## Step 3: Run SQL in Supabase
-
-Open **Supabase Dashboard → SQL Editor → New Query** and run:
-
-```sql
-INSERT INTO tenants (
-  slug,
-  hostname,
-  app_name,
-  app_subtitle,
-  app_emoji,
-  landing_title,
-  landing_tagline,
-  primary_color,
-  team_code,
-  admin_hash,
-  super_hash,
-  max_reps,
-  is_active
-) VALUES (
-  'skylinerealty',                    -- unique slug
-  'dialkaro.celerapps.com',          -- shared hostname (always this)
-  'Skyline Realty',                   -- header name
-  'Build · Sell · Grow',             -- header subtitle
-  '🏠',                              -- header emoji
-  'Skyline Realty',                   -- landing page title
-  'Smart calling for real estate teams', -- landing tagline
-  '#E67E22',                         -- brand color
-  'SKYLINE2026',                     -- team code for reps
-  'PASTE_ADMIN_HASH_HERE',          -- from Step 2
-  'PASTE_SUPER_HASH_HERE',          -- from Step 2
-  15,                                -- max reps
-  true
-);
-```
-
-**Verify:**
-```sql
-SELECT slug, app_name, team_code, max_reps FROM tenants ORDER BY created_at DESC;
-```
-
----
-
-## Step 4: Create Client Folder
-
-In the repo, create a config file for the client:
-
-```bash
-mkdir -p clients/skyline-realty
-```
-
-Create `clients/skyline-realty/config.md`:
-
-```markdown
-# Skyline Realty — Client Tenant
-
-## Onboarded: 2026-04-20
-
-| Field | Value |
-|-------|-------|
-| Slug | skylinerealty |
-| App Name | Skyline Realty |
-| Subtitle | Build · Sell · Grow |
-| Emoji | 🏠 |
-| Team Code | SKYLINE2026 |
-| Max Reps | 15 |
-| Admin Password | skyline@admin2026 |
-| Super Admin | skyline@super2026 |
-
-## Status
-- [x] Tenant created in Supabase
-- [ ] Manager trained
-- [ ] Reps onboarded
-```
-
-Commit and push:
-```bash
-git add -A
-git commit -m "client: onboard Skyline Realty"
-git push origin main
-```
-
----
-
-## Step 5: Test the Client Setup
-
-### 5a. Manager Login
-1. Go to **https://dialkaro.celerapps.com**
-2. Click **"Manager"**
-3. Login: `admin` / `skyline@admin2026`
-4. ✅ **Verify**: Header shows **🏠 Skyline Realty — Build · Sell · Grow**
-
-### 5b. Rep Registration
-1. Open an **incognito window**
-2. Go to **https://dialkaro.celerapps.com**
-3. Click **"Sales Rep"** → **Register** tab
-4. Fill details + Team Code: `SKYLINE2026`
-5. ✅ **Verify**: Header switches to **🏠 Skyline Realty** after registration
-
-### 5c. Data Isolation
-1. Login as Skyline admin → check Users tab → only Skyline reps visible
-2. Login as DialKaro admin → check Users tab → Skyline reps NOT visible
-3. ✅ **Verify**: Complete data isolation between tenants
-
----
-
-## Step 6: Share Credentials with Client
-
-Send this to the client's manager (via secure channel):
-
+### Step 5: Share with Client
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Welcome to DialKaro! 🎉
@@ -178,19 +57,10 @@ Your sales dialer is ready:
 
 🌐 URL:           https://dialkaro.celerapps.com
 👤 Manager Login:  admin
-🔑 Password:      skyline@admin2026
+🔑 Password:      [ADMIN_PASSWORD]
 
-📋 Team Code for your sales reps: SKYLINE2026
-   (Share this with reps so they can register)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-HOW YOUR REPS REGISTER:
-1. Open https://dialkaro.celerapps.com
-2. Click "Sales Rep" → "Register"
-3. Fill in name, email, phone, password
-4. Enter Team Code: SKYLINE2026
-5. Done! They can start uploading leads.
+📋 Team Code for reps: [TEAMCODE]
+   (Share with reps so they can register)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Powered by CelerApps
@@ -199,60 +69,166 @@ HOW YOUR REPS REGISTER:
 
 ---
 
-## 🔧 Troubleshooting
+## 📋 Option B: Manual SQL (Advanced)
 
-### "Invalid Team Code" during registration
-- Check if the `team_code` column exists: `SELECT team_code FROM tenants;`
-- If NULL, run: `UPDATE tenants SET team_code = 'CODE' WHERE slug = 'slugname';`
+Use this if you can't access the Super Admin Panel.
 
-### Header still shows "DialKaro" after login
-- Hard refresh: `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac)
-- Check browser console for `[Tenant] Loaded:` log
-- Verify tenant exists: `SELECT * FROM tenants WHERE slug = 'slugname';`
+### Step 1: Gather Client Info
 
-### Admin login shows wrong tenant's data
-- Each admin password hash must be **unique** across all tenants
-- Run: `SELECT slug, admin_hash FROM tenants;` — check for duplicates
+| # | Field | Example |
+|---|-------|---------|
+| 1 | Company Name | Skyline Realty |
+| 2 | Subtitle | Build · Sell · Grow |
+| 3 | Emoji | 🏠 |
+| 4 | Brand Color | `#E67E22` |
+| 5 | Tagline | Smart calling for real estate teams |
+| 6 | Team Code | `SKYLINE2026` |
+| 7 | Max Reps | 15 |
+| 8 | Admin Password | `skyline@admin2026` |
+| 9 | Super Admin Pass | `skyline@super2026` |
+| 10 | Subscription End | `2027-04-21` (optional) |
 
-### Rep limit reached
-- Error: "Registration is closed. Maximum reps reached"
-- Increase limit: `UPDATE tenants SET max_reps = 25 WHERE slug = 'slugname';`
+### Step 2: Generate Hashes
+
+```bash
+echo -n 'skyline@admin2026' | shasum -a 256 | awk '{print $1}'
+echo -n 'skyline@super2026' | shasum -a 256 | awk '{print $1}'
+```
+
+> ⚠️ Use `echo -n` (no newline) — without `-n` the hash will be wrong.
+
+### Step 3: Run SQL
+
+```sql
+INSERT INTO tenants (
+  slug, hostname, app_name, app_subtitle, app_emoji,
+  landing_title, landing_tagline, primary_color, team_code,
+  admin_hash, super_hash, max_reps, subscription_end, is_active
+) VALUES (
+  'skylinerealty',
+  'dialkaro.celerapps.com',
+  'Skyline Realty',
+  'Build · Sell · Grow',
+  '🏠',
+  'Skyline Realty',
+  'Smart calling for real estate teams',
+  '#E67E22',
+  'SKYLINE2026',
+  'PASTE_ADMIN_HASH',
+  'PASTE_SUPER_HASH',
+  15,
+  '2027-04-21',
+  true
+);
+```
+
+### Step 4: Create Config File
+
+```bash
+mkdir -p clients/skyline-realty
+```
+
+Create `clients/skyline-realty/config.md` with credentials and branding.
+
+### Step 5: Test & Share
+Same as Option A, Steps 4 & 5.
 
 ---
 
-## 📊 Quick Reference — All Tenants
+## 📅 Subscription Management
 
-To see all active tenants:
+### How It Works
+
+| Days Remaining | What Happens |
+|---------------|--------------|
+| > 7 days | ✅ Normal access for all users |
+| ≤ 7 days | ⚠️ Amber banner: "Your subscription expires in X days" |
+| Expired (0 or less) | 🔒 **ALL logins blocked** — reps, admins, registrations |
+| No date set | ✅ Unlimited access (for demos and internal use) |
+
+### Setting/Changing Subscription
+
+**Via Super Admin Panel:**
+1. Go to 🏢 Tenants tab
+2. Find the tenant
+3. Pick a date in the Subscription column
+4. Auto-saves immediately
+
+**Via SQL:**
 ```sql
-SELECT slug, app_name, team_code, max_reps, is_active,
-  created_at::date AS onboarded
-FROM tenants
-ORDER BY created_at;
+UPDATE tenants SET subscription_end = '2027-12-31' WHERE slug = 'skylinerealty';
 ```
 
-To count reps per tenant:
+**To remove limit (unlimited access):**
 ```sql
+UPDATE tenants SET subscription_end = NULL WHERE slug = 'skylinerealty';
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### "Invalid Team Code" during registration
+```sql
+SELECT team_code FROM tenants;
+-- If NULL: UPDATE tenants SET team_code = 'CODE' WHERE slug = 'slugname';
+```
+
+### Header still shows "DialKaro" after login
+- Hard refresh: `Ctrl+Shift+R` / `Cmd+Shift+R`
+- Check console for `[Tenant] Loaded:` log
+- Verify: `SELECT app_name FROM tenants WHERE slug = 'slugname';`
+
+### Edits not saving in Super Admin
+Run this SQL to fix RLS:
+```sql
+DROP POLICY IF EXISTS "Allow tenant inserts" ON tenants;
+CREATE POLICY "Allow tenant inserts" ON tenants FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow tenant updates" ON tenants;
+CREATE POLICY "Allow tenant updates" ON tenants FOR UPDATE USING (true);
+```
+
+### Subscription not blocking users
+- Verify column exists: `SELECT subscription_end FROM tenants;`
+- If missing: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS subscription_end DATE;`
+
+### Rep limit reached
+```sql
+UPDATE tenants SET max_reps = 25 WHERE slug = 'slugname';
+```
+
+---
+
+## 📊 Quick Reference SQL
+
+```sql
+-- All tenants
+SELECT slug, app_name, team_code, max_reps, subscription_end, is_active
+FROM tenants ORDER BY created_at;
+
+-- Rep count per tenant
 SELECT t.app_name, COUNT(u.id) AS reps, t.max_reps
 FROM tenants t
 LEFT JOIN user_profiles u ON u.tenant_id = t.id
-GROUP BY t.id, t.app_name, t.max_reps
-ORDER BY t.app_name;
+GROUP BY t.id, t.app_name, t.max_reps;
+
+-- Tenants expiring within 7 days
+SELECT app_name, subscription_end,
+  (subscription_end - CURRENT_DATE) AS days_left
+FROM tenants
+WHERE subscription_end IS NOT NULL
+  AND subscription_end <= CURRENT_DATE + 7;
 ```
 
 ---
 
 ## ⏱ Time Summary
 
-| Step | Time |
-|------|------|
-| Gather info | 2 min |
-| Generate hashes | 1 min |
-| Run SQL | 1 min |
-| Create client folder | 1 min |
-| Test | 3 min |
-| Share credentials | 2 min |
-| **Total** | **~10 min** |
+| Method | Time |
+|--------|------|
+| **Super Admin Panel** | ~2 min |
+| **Manual SQL** | ~10 min |
 
 ---
 
-> **🔒 Security Note**: Never commit plaintext passwords to the repo. The `config.md` files should only be accessible to CelerApps team members. Consider making the repo private if it isn't already.
+> **🔒 Security**: Passwords are SHA-256 hashed. Never store plaintext in config files unless the repo is private.
