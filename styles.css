@@ -29,6 +29,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .landing-logo{font-size:60px;margin-bottom:20px;filter:drop-shadow(0 0 20px rgba(37,211,102,.4))}
 .landing-wrap h1{font-family:'Inter',sans-serif;font-size:26px;font-weight:800;color:var(--accent);margin-bottom:8px}
 .landing-wrap p{font-size:12px;color:var(--muted);margin-bottom:40px;letter-spacing:.5px}
+.landing-footer{margin-top:40px;font-size:10px;color:var(--muted);opacity:.5;letter-spacing:.3px;cursor:default;user-select:none;padding:12px}
 .role-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .role-card{background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:32px 20px;cursor:pointer;transition:all .3s;position:relative;overflow:hidden}
 .role-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}

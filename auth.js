@@ -1486,14 +1486,14 @@ window.loadLeaderboard = async function(days) {
 // ════════════════════════════════════════════════════════
 
 // Default SUPER_HASH (hardcoded in auth.js line 61) is the CelerApps master key
-var CELERAPPS_SUPER_HASH = '18c6a08bbf0b4a16a736238b3fee6d6330c778041f436cf22c2f61e729a81c39';
+var CELERAPPS_SUPER_HASH = '87859159d3dcdf468afe630139ba14d72603a795a085c25ca60c1ad6c3c154b7';
 
 // Triple-click footer to reveal super admin login
 (function() {
   var clickCount = 0;
   var clickTimer = null;
   document.addEventListener('click', function(e) {
-    var footer = document.getElementById('footerNote');
+    var footer = document.getElementById('landingFooter');
     if(!footer || !footer.contains(e.target)) return;
     clickCount++;
     clearTimeout(clickTimer);
