@@ -644,6 +644,143 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     CELERAPPS SUPER ADMIN AUTH
+══════════════════════════════════════════ -->
+<div class="auth-screen" id="superAuthScreen">
+  <div class="auth-card super-auth-card">
+    <div class="auth-back" onclick="backToLanding()">← Back</div>
+    <div class="auth-logo-wrap super">
+      <span class="icon">⚡</span>
+      <h2>CelerApps Admin</h2>
+      <p>Platform Management Console</p>
+    </div>
+    <div class="field-group">
+      <label>🔑 Super Admin Password</label>
+      <div class="pw-toggle">
+        <input type="password" class="field-input super-focus" id="superAdminPass" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')superAdminLogin()">
+        <span class="pw-eye" onclick="togglePw('superAdminPass',this)">👁</span>
+      </div>
+    </div>
+    <button class="auth-btn gold" onclick="superAdminLogin()">Access Platform Console →</button>
+    <div class="auth-msg" id="superAdminMsg"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     CELERAPPS SUPER ADMIN PANEL
+══════════════════════════════════════════ -->
+<div id="superPanel" style="display:none">
+  <div class="super-container">
+    <div class="super-header">
+      <div class="super-logo">⚡</div>
+      <div>
+        <h1>CelerApps Console</h1>
+        <p>Platform Management · All Tenants</p>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <span class="super-badge">🔒 PLATFORM ADMIN</span>
+        <button class="btn btn-ghost" onclick="superAdminLogout()">← Logout</button>
+      </div>
+    </div>
+
+    <!-- Global Stats Bar -->
+    <div class="super-stats">
+      <div class="sstat"><div class="val" id="sStatTenants">—</div><div class="lbl">Tenants</div></div>
+      <div class="sstat"><div class="val" id="sStatReps" style="color:var(--green)">—</div><div class="lbl">Total Reps</div></div>
+      <div class="sstat"><div class="val" id="sStatCalls" style="color:#4A90D9">—</div><div class="lbl">Total Calls</div></div>
+      <div class="sstat"><div class="val" id="sStatActive" style="color:var(--warn)">—</div><div class="lbl">Active Today</div></div>
+    </div>
+
+    <!-- Super Admin Tabs -->
+    <div class="super-tabs">
+      <button class="super-tab active" id="superTab-tenants" onclick="switchSuperTab('tenants')">🏢 Tenants</button>
+      <button class="super-tab" id="superTab-addtenant" onclick="switchSuperTab('addtenant')">➕ Add Tenant</button>
+      <button class="super-tab" id="superTab-globalstats" onclick="switchSuperTab('globalstats')">📊 Global Stats</button>
+    </div>
+
+    <!-- TAB: Tenants List -->
+    <div id="superPanel-tenants">
+      <div class="super-card">
+        <div class="table-scroll-wrap">
+          <table class="super-table">
+            <thead><tr>
+              <th>Tenant</th><th>Team Code</th><th>Reps</th><th>Max</th><th>Status</th><th>Created</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="tenantsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Add Tenant -->
+    <div id="superPanel-addtenant" style="display:none">
+      <div class="super-card" style="max-width:600px">
+        <h3 style="margin-bottom:16px;color:var(--warn)">➕ Onboard New Client</h3>
+        <div class="field-group">
+          <label>🏢 Company Name</label>
+          <input type="text" class="field-input" id="ntName" placeholder="e.g. Skyline Realty">
+        </div>
+        <div class="field-group">
+          <label>📝 Subtitle</label>
+          <input type="text" class="field-input" id="ntSubtitle" placeholder="e.g. Build · Sell · Grow">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="field-group">
+            <label>😀 Emoji</label>
+            <input type="text" class="field-input" id="ntEmoji" placeholder="🏠" maxlength="4">
+          </div>
+          <div class="field-group">
+            <label>🎨 Color</label>
+            <input type="text" class="field-input" id="ntColor" placeholder="#E67E22" value="#25D366">
+          </div>
+        </div>
+        <div class="field-group">
+          <label>💬 Landing Tagline</label>
+          <input type="text" class="field-input" id="ntTagline" placeholder="e.g. Smart calling for real estate teams">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="field-group">
+            <label>🏷 Team Code</label>
+            <input type="text" class="field-input" id="ntTeamCode" placeholder="e.g. SKYLINE2026" style="text-transform:uppercase">
+          </div>
+          <div class="field-group">
+            <label>👥 Max Reps</label>
+            <input type="number" class="field-input" id="ntMaxReps" placeholder="15" value="15" min="1" max="500">
+          </div>
+        </div>
+        <div class="field-group">
+          <label>🔑 Admin Password (for client's manager)</label>
+          <input type="text" class="field-input" id="ntAdminPass" placeholder="e.g. skyline@admin2026">
+        </div>
+        <div class="field-group">
+          <label>🔐 Super Admin Password (for you only)</label>
+          <input type="text" class="field-input" id="ntSuperPass" placeholder="e.g. skyline@super2026">
+        </div>
+        <button class="auth-btn gold" onclick="addNewTenant()" id="addTenantBtn" style="margin-top:12px">🚀 Create Tenant</button>
+        <div class="auth-msg" id="addTenantMsg"></div>
+      </div>
+    </div>
+
+    <!-- TAB: Global Stats -->
+    <div id="superPanel-globalstats" style="display:none">
+      <div class="super-card">
+        <h3 style="margin-bottom:16px;color:#4A90D9">📊 Cross-Tenant Performance</h3>
+        <div class="table-scroll-wrap">
+          <table class="super-table">
+            <thead><tr>
+              <th>Tenant</th><th>Reps</th><th>Total Calls</th><th>Interested</th><th>Callbacks</th><th>Avg Duration</th>
+            </tr></thead>
+            <tbody id="globalStatsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      EXTERNAL DEPENDENCIES (CDN)
 ══════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>

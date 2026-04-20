@@ -1480,3 +1480,277 @@ window.loadLeaderboard = async function(days) {
     body.appendChild(errTr);
   }
 };
+
+// ════════════════════════════════════════════════════════
+//  CELERAPPS SUPER ADMIN PANEL
+// ════════════════════════════════════════════════════════
+
+// Default SUPER_HASH (hardcoded in auth.js line 61) is the CelerApps master key
+var CELERAPPS_SUPER_HASH = '18c6a08bbf0b4a16a736238b3fee6d6330c778041f436cf22c2f61e729a81c39';
+
+// Triple-click footer to reveal super admin login
+(function() {
+  var clickCount = 0;
+  var clickTimer = null;
+  document.addEventListener('click', function(e) {
+    var footer = document.getElementById('footerNote');
+    if(!footer || !footer.contains(e.target)) return;
+    clickCount++;
+    clearTimeout(clickTimer);
+    if(clickCount >= 3) {
+      clickCount = 0;
+      showSuperAuth();
+    }
+    clickTimer = setTimeout(function() { clickCount = 0; }, 600);
+  });
+})();
+
+window.showSuperAuth = function() {
+  document.getElementById('landingScreen').style.display = 'none';
+  document.getElementById('superAuthScreen').classList.add('visible');
+  setTimeout(function(){ document.getElementById('superAdminPass').focus(); }, 200);
+};
+
+// SHA-256 hash helper (browser native)
+async function sha256(str) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+
+window.superAdminLogin = async function() {
+  var pass = document.getElementById('superAdminPass').value;
+  if(!pass) return showMsg('superAdminMsg','❌ Enter the super admin password');
+  var hash = await sha256(pass);
+  if(hash !== CELERAPPS_SUPER_HASH) {
+    return showMsg('superAdminMsg','❌ Invalid password. This is for CelerApps admins only.');
+  }
+  document.getElementById('superAuthScreen').classList.remove('visible');
+  document.getElementById('superPanel').style.display = 'block';
+  loadAllTenants();
+};
+
+window.superAdminLogout = function() {
+  document.getElementById('superPanel').style.display = 'none';
+  document.getElementById('landingScreen').style.display = '';
+};
+
+window.switchSuperTab = function(tab) {
+  ['tenants','addtenant','globalstats'].forEach(function(t) {
+    var btn = document.getElementById('superTab-' + t);
+    var panel = document.getElementById('superPanel-' + t);
+    if(btn) btn.className = 'super-tab' + (t === tab ? ' active' : '');
+    if(panel) panel.style.display = (t === tab) ? 'block' : 'none';
+  });
+  if(tab === 'globalstats') loadGlobalStats();
+};
+
+// ── Load All Tenants ──────────────────────────────────
+window.loadAllTenants = async function() {
+  if(!_sb) return;
+  try {
+    var res = await _sb.from('tenants').select('*').order('created_at', { ascending: true });
+    if(res.error) throw res.error;
+    var tenants = res.data || [];
+
+    // Count reps per tenant
+    var repRes = await _sb.from('user_profiles').select('tenant_id');
+    var repCounts = {};
+    var totalReps = 0;
+    (repRes.data || []).forEach(function(u) {
+      var tid = u.tenant_id || 'none';
+      repCounts[tid] = (repCounts[tid] || 0) + 1;
+      totalReps++;
+    });
+
+    // Count daily calls
+    var today = new Date().toISOString().split('T')[0];
+    var statsRes = await _sb.from('daily_stats').select('calls_made, stat_date');
+    var totalCalls = 0;
+    var activeToday = 0;
+    (statsRes.data || []).forEach(function(s) {
+      totalCalls += (s.calls_made || 0);
+      if(s.stat_date === today && s.calls_made > 0) activeToday++;
+    });
+
+    // Update stats bar
+    document.getElementById('sStatTenants').textContent = tenants.length;
+    document.getElementById('sStatReps').textContent = totalReps;
+    document.getElementById('sStatCalls').textContent = totalCalls;
+    document.getElementById('sStatActive').textContent = activeToday;
+
+    // Render table
+    var body = document.getElementById('tenantsTableBody');
+    body.innerHTML = '';
+    tenants.forEach(function(t) {
+      var reps = repCounts[t.id] || 0;
+      var created = t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'2-digit' }) : '—';
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><span class="tenant-emoji">' + (t.app_emoji || '📱') + '</span>' +
+        '<span class="tenant-name">' + (t.app_name || t.slug) + '</span><br>' +
+        '<span class="tenant-slug">' + t.slug + '</span></td>' +
+        '<td><code style="background:rgba(255,171,64,.1);padding:2px 8px;border-radius:4px;font-size:11px;color:var(--warn)">' + (t.team_code || '—') + '</code></td>' +
+        '<td style="font-weight:700">' + reps + '</td>' +
+        '<td>' + (t.max_reps || 10) + '</td>' +
+        '<td><span class="' + (t.is_active ? 'status-active' : 'status-inactive') + '">' + (t.is_active ? '● Active' : '● Disabled') + '</span></td>' +
+        '<td style="font-size:11px;color:var(--muted)">' + created + '</td>' +
+        '<td><button class="action-btn' + (t.is_active ? ' danger' : '') + '" onclick="toggleTenantActive(\'' + t.id + '\',' + !t.is_active + ')">' + (t.is_active ? 'Disable' : 'Enable') + '</button></td>';
+      body.appendChild(tr);
+    });
+  } catch(e) {
+    console.error('Load tenants:', e);
+  }
+};
+
+// ── Toggle Tenant Active/Inactive ─────────────────────
+window.toggleTenantActive = async function(tenantId, newState) {
+  if(!_sb) return;
+  var confirmMsg = newState ? 'Enable this tenant? Their reps will be able to login again.' : 'Disable this tenant? Their reps will NOT be able to login.';
+  var ok = await appConfirm(confirmMsg, '⚡');
+  if(!ok) return;
+  try {
+    var res = await _sb.from('tenants').update({ is_active: newState }).eq('id', tenantId);
+    if(res.error) throw res.error;
+    showToast(newState ? '✅ Tenant enabled' : '🚫 Tenant disabled');
+    loadAllTenants();
+  } catch(e) {
+    appAlert('Error: ' + e.message, '❌');
+  }
+};
+
+// ── Add New Tenant ────────────────────────────────────
+window.addNewTenant = async function() {
+  var name = document.getElementById('ntName').value.trim();
+  var subtitle = document.getElementById('ntSubtitle').value.trim();
+  var emoji = document.getElementById('ntEmoji').value.trim() || '📱';
+  var color = document.getElementById('ntColor').value.trim() || '#25D366';
+  var tagline = document.getElementById('ntTagline').value.trim();
+  var teamCode = document.getElementById('ntTeamCode').value.trim().toUpperCase();
+  var maxReps = parseInt(document.getElementById('ntMaxReps').value) || 15;
+  var adminPass = document.getElementById('ntAdminPass').value.trim();
+  var superPass = document.getElementById('ntSuperPass').value.trim();
+
+  if(!name) return showMsg('addTenantMsg','❌ Company name is required');
+  if(!teamCode) return showMsg('addTenantMsg','❌ Team code is required');
+  if(!adminPass) return showMsg('addTenantMsg','❌ Admin password is required');
+  if(!superPass) return showMsg('addTenantMsg','❌ Super admin password is required');
+  if(adminPass.length < 8) return showMsg('addTenantMsg','❌ Admin password must be at least 8 characters');
+
+  var btn = document.getElementById('addTenantBtn');
+  btn.disabled = true; btn.textContent = '⏳ Creating...';
+
+  try {
+    // Generate slug from name
+    var slug = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 30);
+
+    // Hash passwords using browser crypto
+    var adminHash = await sha256(adminPass);
+    var superHash = await sha256(superPass);
+
+    var res = await _sb.from('tenants').insert({
+      slug: slug,
+      hostname: 'dialkaro.celerapps.com',
+      app_name: name,
+      app_subtitle: subtitle || 'Powered by DialKaro',
+      app_emoji: emoji,
+      landing_title: name,
+      landing_tagline: tagline || 'Smart sales dialing for your team',
+      primary_color: color,
+      team_code: teamCode,
+      admin_hash: adminHash,
+      super_hash: superHash,
+      max_reps: maxReps,
+      is_active: true
+    });
+
+    if(res.error) {
+      if(res.error.message.includes('duplicate') || res.error.message.includes('unique')) {
+        showMsg('addTenantMsg','❌ Duplicate slug or team code. Use a different name or team code.');
+      } else {
+        showMsg('addTenantMsg','❌ ' + res.error.message);
+      }
+      btn.disabled = false; btn.textContent = '🚀 Create Tenant';
+      return;
+    }
+
+    showMsg('addTenantMsg','✅ Tenant "' + name + '" created! Team Code: ' + teamCode, 'success');
+    // Clear form
+    ['ntName','ntSubtitle','ntEmoji','ntTagline','ntTeamCode','ntAdminPass','ntSuperPass'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('ntMaxReps').value = '15';
+    document.getElementById('ntColor').value = '#25D366';
+
+    // Refresh tenants list
+    loadAllTenants();
+    // Auto-switch to tenants tab after 2 seconds
+    setTimeout(function(){ switchSuperTab('tenants'); }, 2000);
+  } catch(e) {
+    showMsg('addTenantMsg','❌ ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '🚀 Create Tenant';
+};
+
+// ── Global Stats (Cross-Tenant) ───────────────────────
+window.loadGlobalStats = async function() {
+  if(!_sb) return;
+  try {
+    // Get all tenants
+    var tRes = await _sb.from('tenants').select('id, app_name, app_emoji');
+    if(tRes.error) throw tRes.error;
+    var tenants = tRes.data || [];
+
+    // Get all reps
+    var repRes = await _sb.from('user_profiles').select('tenant_id');
+    var repCounts = {};
+    (repRes.data || []).forEach(function(u) {
+      var tid = u.tenant_id || 'none';
+      repCounts[tid] = (repCounts[tid] || 0) + 1;
+    });
+
+    // Get all daily stats
+    var statsRes = await _sb.from('daily_stats').select('user_id, calls_made, interested, callbacks, avg_duration, user_profiles!inner(tenant_id)');
+    var tenantStats = {};
+    (statsRes.data || []).forEach(function(s) {
+      var tid = (s.user_profiles && s.user_profiles.tenant_id) || 'none';
+      if(!tenantStats[tid]) tenantStats[tid] = { calls: 0, interested: 0, callbacks: 0, totalDur: 0, durCount: 0 };
+      tenantStats[tid].calls += (s.calls_made || 0);
+      tenantStats[tid].interested += (s.interested || 0);
+      tenantStats[tid].callbacks += (s.callbacks || 0);
+      if(s.avg_duration > 0) {
+        tenantStats[tid].totalDur += s.avg_duration;
+        tenantStats[tid].durCount++;
+      }
+    });
+
+    var body = document.getElementById('globalStatsBody');
+    body.innerHTML = '';
+    tenants.forEach(function(t) {
+      var reps = repCounts[t.id] || 0;
+      var st = tenantStats[t.id] || { calls: 0, interested: 0, callbacks: 0, totalDur: 0, durCount: 0 };
+      var avgDur = st.durCount > 0 ? Math.round(st.totalDur / st.durCount) : 0;
+      var durStr = avgDur > 0 ? Math.floor(avgDur / 60) + ':' + String(avgDur % 60).padStart(2, '0') : '—';
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><span class="tenant-emoji">' + (t.app_emoji || '📱') + '</span><span class="tenant-name">' + t.app_name + '</span></td>' +
+        '<td style="font-weight:700">' + reps + '</td>' +
+        '<td style="font-weight:700;color:#4A90D9">' + st.calls + '</td>' +
+        '<td style="color:var(--green)">' + st.interested + '</td>' +
+        '<td style="color:var(--warn)">' + st.callbacks + '</td>' +
+        '<td>' + durStr + '</td>';
+      body.appendChild(tr);
+    });
+  } catch(e) {
+    console.error('Global stats:', e);
+  }
+};
+
+// Fix showMsg to support success color
+var _origShowMsg = window.showMsg || function(){};
+window.showMsg = function(id, msg, type) {
+  var el = document.getElementById(id);
+  if(el) {
+    el.textContent = msg;
+    el.style.color = type === 'success' ? 'var(--green)' : '';
+  }
+};
