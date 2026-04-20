@@ -618,6 +618,8 @@ async function autoSaveSession() {
       status:        'active',
       updated_at:    new Date().toISOString()
     };
+    // Multi-tenant: tag session with tenant
+    if(typeof currentTenant !== 'undefined' && currentTenant) payload.tenant_id = currentTenant.id;
     if(_activeSessionId) {
       var r = await _sb.from('call_sessions').update(payload).eq('id', _activeSessionId);
       if(r.error) throw r.error;
@@ -1226,7 +1228,8 @@ window.saveCallback = async function() {
         callback_date: cbDate,
         callback_time: cbTime || null,
         note: _cbPendingNote,
-        status: 'pending'
+        status: 'pending',
+        tenant_id: (typeof currentTenant !== 'undefined' && currentTenant) ? currentTenant.id : null
       });
       var dateStr = new Date(cbDate).toLocaleDateString('en-IN', {day:'numeric',month:'short'});
       showToast('🔔 Callback scheduled for ' + dateStr + (cbTime ? ' at ' + cbTime : ''));
@@ -1423,7 +1426,7 @@ async function saveDailyStats() {
   var avgDur = calledList.length ? Math.round(calledList.reduce(function(s,c){ return s+c.duration; },0)/calledList.length) : 0;
 
   try {
-    await _sb.from('daily_stats').upsert({
+    var statsPayload = {
       user_id: currentUser.id,
       stat_date: new Date().toISOString().split('T')[0],
       total_leads: contacts.length,
@@ -1434,6 +1437,9 @@ async function saveDailyStats() {
       noanswer: oc.noanswer || 0,
       notinterested: oc.notinterested || 0,
       avg_call_duration: avgDur
-    }, { onConflict: 'user_id,stat_date' });
+    };
+    // Multi-tenant: tag stats with tenant
+    if(typeof currentTenant !== 'undefined' && currentTenant) statsPayload.tenant_id = currentTenant.id;
+    await _sb.from('daily_stats').upsert(statsPayload, { onConflict: 'user_id,stat_date' });
   } catch(e) { console.warn('Daily stats save:', e.message); }
 }

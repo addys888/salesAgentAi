@@ -56,11 +56,16 @@ function applyAppConfig() {
 const SUPABASE_URL  = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
 const ADMIN_USER    = 'admin';
-// ── Hashed credentials (SHA-256) — plaintext passwords are NEVER stored ──
-const ADMIN_HASH    = '4512f5c7a37aa142b97bde9f8b2d8a1382d5118e1e87ffdf035d3bfaeb6b8e29';
-const SUPER_HASH    = '18c6a08bbf0b4a16a736238b3fee6d6330c778041f436cf22c2f61e729a81c39';
+// ── Hashed credentials (SHA-256) — defaults, overridden by tenant config ──
+var ADMIN_HASH      = '4512f5c7a37aa142b97bde9f8b2d8a1382d5118e1e87ffdf035d3bfaeb6b8e29';
+var SUPER_HASH      = '18c6a08bbf0b4a16a736238b3fee6d6330c778041f436cf22c2f61e729a81c39';
 var MAX_REPS        = 10;
 var isSuperAdmin    = false;
+
+// ════════════════════════════════════════════════════════
+//  MULTI-TENANT: Current tenant state
+// ════════════════════════════════════════════════════════
+var currentTenant   = null; // Loaded from tenants table on boot
 
 // ── Admin security: rate limiting & session timeout ──
 const ADMIN_MAX_ATTEMPTS   = 5;
@@ -119,6 +124,58 @@ function getSB() {
 }
 
 // ════════════════════════════════════════════════════════
+//  MULTI-TENANT: Load tenant config from hostname
+// ════════════════════════════════════════════════════════
+async function loadTenantConfig() {
+  if(!_sb) return;
+  try {
+    var hostname = window.location.hostname;
+    // Skip tenant lookup for pure localhost development
+    if(hostname === 'localhost' || hostname === '127.0.0.1') {
+      console.log('[Tenant] localhost — using default config');
+      return;
+    }
+    // Also try GitHub Pages URLs like addys888.github.io
+    var res = await _sb.from('tenants')
+      .select('*')
+      .eq('hostname', hostname)
+      .eq('is_active', true)
+      .single();
+    if(res.error || !res.data) {
+      // Fallback: try to find by slug from first part of hostname
+      var slugGuess = hostname.split('.')[0];
+      var res2 = await _sb.from('tenants')
+        .select('*')
+        .eq('slug', slugGuess)
+        .eq('is_active', true)
+        .single();
+      if(!res2.error && res2.data) {
+        res = res2;
+      } else {
+        console.log('[Tenant] No tenant found for', hostname, '— using defaults');
+        return;
+      }
+    }
+    currentTenant = res.data;
+    // Apply tenant overrides
+    ADMIN_HASH = res.data.admin_hash || ADMIN_HASH;
+    SUPER_HASH = res.data.super_hash || SUPER_HASH;
+    MAX_REPS   = res.data.max_reps || MAX_REPS;
+    // Apply branding
+    if(res.data.app_name)       APP_CONFIG.appName = res.data.app_name;
+    if(res.data.app_subtitle)   APP_CONFIG.appSubtitle = res.data.app_subtitle;
+    if(res.data.app_emoji)      APP_CONFIG.appEmoji = res.data.app_emoji;
+    if(res.data.landing_title)  APP_CONFIG.landingTitle = res.data.landing_title;
+    if(res.data.landing_tagline) APP_CONFIG.landingTagline = res.data.landing_tagline;
+    applyAppConfig();
+    console.log('[Tenant] Loaded:', res.data.app_name, '(' + res.data.slug + ')');
+  } catch(e) {
+    // tenants table may not exist yet — gracefully fall back
+    console.warn('[Tenant] Config load skipped:', e.message);
+  }
+}
+
+// ════════════════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════════════════
 var currentUser = null;
@@ -134,6 +191,9 @@ var otpEmail = '', otpTimerInterval = null, otpSeconds = 30;
 window.addEventListener('DOMContentLoaded', async function() {
   if (!_sb) initSupabase();
   if (!_sb) { document.getElementById('configBanner').style.display='block'; return; }
+
+  // ── Multi-tenant: Load tenant config from hostname ──
+  await loadTenantConfig();
 
   var hash = window.location.hash;
   if(hash && hash.includes('type=recovery')) {
@@ -305,7 +365,9 @@ window.userRegister = async function() {
 
     var slotCheckPassed = false;
     try {
-      var countRes = await sb.from('user_profiles').select('id', { count: 'exact', head: true });
+      var countQuery = sb.from('user_profiles').select('id', { count: 'exact', head: true });
+      if(currentTenant) countQuery = countQuery.eq('tenant_id', currentTenant.id);
+      var countRes = await countQuery;
       if(countRes.error) {
         showMsg('registerMsg','❌ Unable to verify registration slots. Please try again in a moment or contact your administrator.');
         btn.disabled = false; btn.textContent = 'Create Account →';
@@ -344,7 +406,8 @@ window.userRegister = async function() {
         try {
           await sb.from('user_profiles').upsert({
             id: currentUser.id, full_name: name, email: email,
-            phone_number: phone, status: 'active'
+            phone_number: phone, status: 'active',
+            tenant_id: currentTenant ? currentTenant.id : null
           }, { onConflict: 'id' });
         } catch(pe) { console.warn('profile upsert:', pe); }
         showMsg('registerMsg','✅ Account created! Entering app...','success');
@@ -364,7 +427,8 @@ window.userRegister = async function() {
       try {
         await sb.from('user_profiles').upsert({
           id: user.id, full_name: name, email: email,
-          phone_number: phone, status: 'active'
+          phone_number: phone, status: 'active',
+          tenant_id: currentTenant ? currentTenant.id : null
         }, { onConflict: 'id' });
       } catch(pe) { console.warn('profile upsert:', pe); }
       showMsg('registerMsg','✅ Account created! Entering app...','success');
@@ -375,7 +439,8 @@ window.userRegister = async function() {
         try {
           await sb.from('user_profiles').upsert({
             id: user.id, full_name: name, email: email,
-            phone_number: phone, status: 'active'
+            phone_number: phone, status: 'active',
+            tenant_id: currentTenant ? currentTenant.id : null
           }, { onConflict: 'id' });
         } catch(pe) {}
       }
@@ -627,8 +692,34 @@ window.adminLogin = async function() {
 
   try {
     var hash = await sha256(p);
+    // Multi-tenant: match against current tenant's hashes
     var validAdmin = (u === ADMIN_USER && hash === ADMIN_HASH);
     var validSuper = (u === ADMIN_USER && hash === SUPER_HASH);
+
+    // If no tenant loaded yet, try to find tenant by admin_hash match
+    if(!validAdmin && !validSuper && _sb) {
+      try {
+        var tenantRes = await _sb.from('tenants')
+          .select('*')
+          .or('admin_hash.eq.' + hash + ',super_hash.eq.' + hash)
+          .single();
+        if(!tenantRes.error && tenantRes.data) {
+          currentTenant = tenantRes.data;
+          ADMIN_HASH = tenantRes.data.admin_hash;
+          SUPER_HASH = tenantRes.data.super_hash;
+          MAX_REPS = tenantRes.data.max_reps || 10;
+          validAdmin = (hash === ADMIN_HASH);
+          validSuper = (hash === SUPER_HASH);
+          // Apply tenant branding
+          APP_CONFIG.appName = tenantRes.data.app_name || APP_CONFIG.appName;
+          APP_CONFIG.appSubtitle = tenantRes.data.app_subtitle || APP_CONFIG.appSubtitle;
+          APP_CONFIG.appEmoji = tenantRes.data.app_emoji || APP_CONFIG.appEmoji;
+          APP_CONFIG.landingTitle = tenantRes.data.landing_title || APP_CONFIG.landingTitle;
+          APP_CONFIG.landingTagline = tenantRes.data.landing_tagline || APP_CONFIG.landingTagline;
+          applyAppConfig();
+        }
+      } catch(te) { console.warn('Tenant lookup:', te.message); }
+    }
 
     if(validAdmin || validSuper) {
       _adminAttempts = 0;
@@ -684,7 +775,10 @@ window.loadUsers = async function() {
   document.getElementById('usersTable').style.display = 'none';
   try {
     var sb = _sb;
-    var res = await sb.from('user_profiles').select('*').order('created_at', { ascending: false });
+    var query = sb.from('user_profiles').select('*').order('created_at', { ascending: false });
+    // Multi-tenant: filter by tenant
+    if(currentTenant) query = query.eq('tenant_id', currentTenant.id);
+    var res = await query;
     if(res.error) throw res.error;
     var data = res.data;
     if(!data || data.length === 0){
@@ -881,7 +975,9 @@ window.saveMaxReps = async function() {
   if(!val || val < 1) return showToast('❌ Enter a valid number');
 
   try {
-    var countRes = await _sb.from('user_profiles').select('id', { count: 'exact', head: true });
+    var countQuery = _sb.from('user_profiles').select('id', { count: 'exact', head: true });
+    if(currentTenant) countQuery = countQuery.eq('tenant_id', currentTenant.id);
+    var countRes = await countQuery;
     var currentCount = countRes.count || 0;
     if(val < currentCount) {
       var proceed = await appConfirm('⚠️ You have ' + currentCount + ' registered reps but are setting limit to ' + val + '. New registrations will be blocked. Continue?', '⚠️');
@@ -1044,12 +1140,22 @@ window.loadAnalytics = async function(days) {
       .select('*, user_profiles!inner(full_name, email)')
       .gte('stat_date', cutoff.toISOString().split('T')[0])
       .order('stat_date', {ascending: true});
+    // Multi-tenant: filter by tenant (applied if join succeeds)
+    if(currentTenant) {
+      res = await _sb.from('daily_stats')
+        .select('*, user_profiles!inner(full_name, email, tenant_id)')
+        .eq('tenant_id', currentTenant.id)
+        .gte('stat_date', cutoff.toISOString().split('T')[0])
+        .order('stat_date', {ascending: true});
+    }
     if(res.error) {
       // Fallback if join fails
-      var res2 = await _sb.from('daily_stats')
+      var fallbackQuery = _sb.from('daily_stats')
         .select('*')
         .gte('stat_date', cutoff.toISOString().split('T')[0])
         .order('stat_date', {ascending: true});
+      if(currentTenant) fallbackQuery = fallbackQuery.eq('tenant_id', currentTenant.id);
+      var res2 = await fallbackQuery;
       if(res2.error) throw res2.error;
       renderAnalyticsCharts(res2.data || [], days);
       return;
@@ -1186,9 +1292,12 @@ window.loadLeaderboard = async function(days) {
   try {
     var cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    var res = await _sb.from('daily_stats')
+    var leaderQuery = _sb.from('daily_stats')
       .select('user_id, called, interested, avg_call_duration')
       .gte('stat_date', cutoff.toISOString().split('T')[0]);
+    // Multi-tenant: filter by tenant
+    if(currentTenant) leaderQuery = leaderQuery.eq('tenant_id', currentTenant.id);
+    var res = await leaderQuery;
     if(res.error) throw res.error;
     if(!res.data || !res.data.length) {
       body.textContent = '';
