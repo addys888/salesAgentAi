@@ -393,6 +393,13 @@ window.userRegister = async function() {
       ADMIN_HASH = tcRes.data.admin_hash || ADMIN_HASH;
       SUPER_HASH = tcRes.data.super_hash || SUPER_HASH;
       MAX_REPS = tcRes.data.max_reps || MAX_REPS;
+      // Apply tenant branding immediately
+      if(tcRes.data.app_name)       APP_CONFIG.appName = tcRes.data.app_name;
+      if(tcRes.data.app_subtitle)   APP_CONFIG.appSubtitle = tcRes.data.app_subtitle;
+      if(tcRes.data.app_emoji)      APP_CONFIG.appEmoji = tcRes.data.app_emoji;
+      if(tcRes.data.landing_title)  APP_CONFIG.landingTitle = tcRes.data.landing_title;
+      if(tcRes.data.landing_tagline) APP_CONFIG.landingTagline = tcRes.data.landing_tagline;
+      applyAppConfig();
     } catch(tcErr) {
       showMsg('registerMsg','❌ Team verification failed. Please try again.');
       btn.disabled = false; btn.textContent = 'Create Account →';
@@ -634,8 +641,40 @@ function enterApp() {
   document.getElementById('landingScreen').style.display = 'none';
   document.getElementById('appContainer').style.display = 'block';
   checkSubscription();
+  // Load correct tenant branding for this user
+  loadUserTenant();
   setTimeout(function(){ checkForActiveSession(); }, 800);
   setTimeout(function(){ if(typeof checkTodayCallbacks === 'function') checkTodayCallbacks(); }, 1200);
+}
+
+// Load tenant branding based on logged-in user's tenant_id
+async function loadUserTenant() {
+  if(!_sb || !currentUser) return;
+  try {
+    var profRes = await _sb.from('user_profiles')
+      .select('tenant_id')
+      .eq('id', currentUser.id)
+      .single();
+    if(profRes.error || !profRes.data || !profRes.data.tenant_id) return;
+    // If we already have the right tenant loaded, skip
+    if(currentTenant && currentTenant.id === profRes.data.tenant_id) return;
+    // Load the tenant
+    var tenRes = await _sb.from('tenants')
+      .select('*')
+      .eq('id', profRes.data.tenant_id)
+      .single();
+    if(tenRes.error || !tenRes.data) return;
+    currentTenant = tenRes.data;
+    ADMIN_HASH = tenRes.data.admin_hash || ADMIN_HASH;
+    SUPER_HASH = tenRes.data.super_hash || SUPER_HASH;
+    MAX_REPS = tenRes.data.max_reps || MAX_REPS;
+    if(tenRes.data.app_name)       APP_CONFIG.appName = tenRes.data.app_name;
+    if(tenRes.data.app_subtitle)   APP_CONFIG.appSubtitle = tenRes.data.app_subtitle;
+    if(tenRes.data.app_emoji)      APP_CONFIG.appEmoji = tenRes.data.app_emoji;
+    if(tenRes.data.landing_title)  APP_CONFIG.landingTitle = tenRes.data.landing_title;
+    if(tenRes.data.landing_tagline) APP_CONFIG.landingTagline = tenRes.data.landing_tagline;
+    applyAppConfig();
+  } catch(e) { console.warn('[Tenant] User tenant load:', e.message); }
 }
 
 // ════════════════════════════════════════════════════════
