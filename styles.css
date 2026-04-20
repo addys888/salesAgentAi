@@ -354,6 +354,12 @@ tr.current .jump-btn{display:none}
 .call-timer{display:inline-flex;align-items:center;gap:6px;background:rgba(37,211,102,.1);border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:4px 10px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--green);letter-spacing:1px;font-variant-numeric:tabular-nums}
 .call-timer.active{animation:pulse-border 2s infinite}
 .call-timer .timer-icon{font-size:12px}
+.call-bottom-row{display:flex;align-items:center;gap:10px;margin-top:8px;width:100%}
+.call-bottom-row .call-timer{flex-shrink:0}
+.call-bottom-row .btn-next{flex:1}
+/* Duration cell in queue table */
+.dur-cell{font-family:'Inter',sans-serif;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dur-cell.has-dur{color:var(--green);font-weight:600}
 
 /* ═══════════════════════════════════════════════
    F2 — CALL NOTES

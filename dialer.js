@@ -335,6 +335,20 @@ function buildTable() {
     tdOc.textContent = '—';
     tr.appendChild(tdOc);
 
+    // Duration cell (⏱)
+    var tdDur = document.createElement('td');
+    tdDur.id = 'dur-cell-'+i;
+    tdDur.className = 'dur-cell';
+    if(c.duration && c.duration > 0) {
+      var dm = Math.floor(c.duration / 60);
+      var ds = c.duration % 60;
+      tdDur.textContent = dm + ':' + String(ds).padStart(2,'0');
+      tdDur.classList.add('has-dur');
+    } else {
+      tdDur.textContent = '—';
+    }
+    tr.appendChild(tdDur);
+
     // Status
     var tdStatus = document.createElement('td');
     var statusSpan = document.createElement('span');
@@ -472,6 +486,14 @@ window.nextContact = function() {
   updateRowStatus(currentIndex,'done');
   var cell = document.getElementById('oc-cell-'+currentIndex);
   if(cell){ var L={interested:'\uD83D\uDFE2 Interested',callback:'\uD83D\uDD14 Callback',noanswer:'\uD83D\uDCF5 No Answer',notinterested:'\uD83D\uDD34 Not Interested','':'\u2014'}; cell.textContent=L[currentOutcome]||'\u2014'; }
+  // Update duration cell in queue row
+  var durCell = document.getElementById('dur-cell-'+currentIndex);
+  if(durCell && dur > 0) {
+    var dm = Math.floor(dur / 60);
+    var ds = dur % 60;
+    durCell.textContent = dm + ':' + String(ds).padStart(2,'0');
+    durCell.className = 'dur-cell has-dur';
+  }
   calledCount++;
   // F8: If callback, show scheduler modal BEFORE advancing
   // The modal will call _advanceToNextContact() when dismissed

@@ -382,17 +382,19 @@
           <div class="cname" id="currentName"></div>
           <div class="cnote" id="currentNote"></div>
         </div>
-        <!-- F7: Call Duration Timer -->
-        <div class="call-timer" title="Call duration">
-          <span class="timer-icon">⏱</span>
-          <span id="callDuration">00:00</span>
-        </div>
         <div class="call-actions">
           <div class="call-buttons">
             <a class="btn btn-call" id="btnCall" href="#" target="_blank" onclick="markCalled()">📲 WhatsApp <span class="kbd-hint"><kbd class="kbd">Enter</kbd></span></a>
             <a class="btn btn-phone" id="btnPhone" href="#" onclick="markCalled()">📞 Phone</a>
           </div>
-          <button class="btn btn-next" onclick="nextContact()" id="btnNext" disabled>✅ Done · Next → <span class="kbd-hint"><kbd class="kbd">→</kbd></span></button>
+          <div class="call-bottom-row">
+            <!-- F7: Call Duration Timer -->
+            <div class="call-timer" title="Call duration">
+              <span class="timer-icon">⏱</span>
+              <span id="callDuration">00:00</span>
+            </div>
+            <button class="btn btn-next" onclick="nextContact()" id="btnNext" disabled>✅ Done · Next → <span class="kbd-hint"><kbd class="kbd">→</kbd></span></button>
+          </div>
         </div>
       </div>
       <div class="outcome-row">
@@ -430,7 +432,7 @@
       </div>
       <div class="queue-scroll">
         <table class="queue-table">
-          <thead><tr><th>#</th><th>Mobile</th><th>Name</th><th>Outcome</th><th>Status</th><th style="width:60px">Jump</th></tr></thead>
+          <thead><tr><th>#</th><th>Mobile</th><th>Name</th><th>Outcome</th><th>⏱</th><th>Status</th><th style="width:60px">Jump</th></tr></thead>
           <tbody id="queueBody"></tbody>
         </table>
       </div>
