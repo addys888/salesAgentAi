@@ -364,15 +364,42 @@ window.userRegister = async function() {
   var email = document.getElementById('regEmail').value.trim();
   var phone = document.getElementById('regPhone').value.trim();
   var pass  = document.getElementById('regPassword').value;
+  var teamCode = (document.getElementById('regTeamCode').value || '').trim().toUpperCase();
   if(!name)  return showMsg('registerMsg','❌ Please enter your full name');
   if(!email) return showMsg('registerMsg','❌ Please enter your email');
   if(!phone || !/^[6-9]\d{9}$/.test(phone)) return showMsg('registerMsg','❌ Enter a valid 10-digit Indian mobile number');
   if(pass.length < 8) return showMsg('registerMsg','❌ Password must be at least 8 characters');
+  if(!teamCode) return showMsg('registerMsg','❌ Please enter your Team Code (ask your manager)');
   var btn = document.getElementById('registerBtn');
-  btn.disabled = true; btn.textContent = '⏳ Creating...';
+  btn.disabled = true; btn.textContent = '⏳ Verifying team...';
   try {
     var sb = _sb;
     if(!sb) throw new Error('Auth service not ready. Please refresh and try again.');
+
+    // Validate team code and switch to correct tenant
+    try {
+      var tcRes = await sb.from('tenants')
+        .select('*')
+        .eq('team_code', teamCode)
+        .eq('is_active', true)
+        .single();
+      if(tcRes.error || !tcRes.data) {
+        showMsg('registerMsg','❌ Invalid Team Code. Please check with your manager and try again.');
+        btn.disabled = false; btn.textContent = 'Create Account →';
+        return;
+      }
+      // Switch to the matched tenant
+      currentTenant = tcRes.data;
+      ADMIN_HASH = tcRes.data.admin_hash || ADMIN_HASH;
+      SUPER_HASH = tcRes.data.super_hash || SUPER_HASH;
+      MAX_REPS = tcRes.data.max_reps || MAX_REPS;
+    } catch(tcErr) {
+      showMsg('registerMsg','❌ Team verification failed. Please try again.');
+      btn.disabled = false; btn.textContent = 'Create Account →';
+      return;
+    }
+
+    btn.textContent = '⏳ Creating...';
     await loadMaxReps();
 
     var slotCheckPassed = false;
