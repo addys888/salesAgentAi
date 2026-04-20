@@ -1584,14 +1584,41 @@ window.loadAllTenants = async function() {
     tenants.forEach(function(t) {
       var reps = repCounts[t.id] || 0;
       var created = t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'2-digit' }) : '—';
+
+      // Subscription info
+      var subEnd = t.subscription_end ? new Date(t.subscription_end) : null;
+      var subDays = '';
+      var subColor = 'var(--muted)';
+      if(subEnd) {
+        var now = new Date(); now.setHours(0,0,0,0); subEnd.setHours(0,0,0,0);
+        var diff = Math.ceil((subEnd - now) / 86400000);
+        if(diff > 7) { subDays = diff + 'd'; subColor = 'var(--green)'; }
+        else if(diff > 0) { subDays = diff + 'd'; subColor = 'var(--warn)'; }
+        else { subDays = 'Expired'; subColor = 'var(--danger)'; }
+      } else {
+        subDays = 'No limit';
+        subColor = 'var(--muted)';
+      }
+
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td><span class="tenant-emoji">' + (t.app_emoji || '📱') + '</span>' +
         '<span class="tenant-name">' + (t.app_name || t.slug) + '</span><br>' +
         '<span class="tenant-slug">' + t.slug + '</span></td>' +
-        '<td><code style="background:rgba(255,171,64,.1);padding:2px 8px;border-radius:4px;font-size:11px;color:var(--warn)">' + (t.team_code || '—') + '</code></td>' +
+        // Editable Team Code
+        '<td><input type="text" value="' + (t.team_code || '') + '" ' +
+        'style="background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.2);color:var(--warn);padding:3px 8px;border-radius:4px;font-size:11px;width:90px;text-transform:uppercase;font-family:monospace" ' +
+        'onchange="updateTenantField(\'' + t.id + '\',\'team_code\',this.value.toUpperCase())" title="Edit team code"></td>' +
         '<td style="font-weight:700">' + reps + '</td>' +
-        '<td>' + (t.max_reps || 10) + '</td>' +
+        // Editable Max Reps
+        '<td><input type="number" value="' + (t.max_reps || 10) + '" min="1" max="500" ' +
+        'style="background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:4px;font-size:12px;width:55px;text-align:center" ' +
+        'onchange="updateTenantField(\'' + t.id + '\',\'max_reps\',parseInt(this.value))" title="Edit max reps"></td>' +
+        // Subscription
+        '<td><span style="color:' + subColor + ';font-weight:600;font-size:11px">' + subDays + '</span><br>' +
+        '<input type="date" value="' + (t.subscription_end || '') + '" ' +
+        'style="background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--muted);padding:2px 4px;border-radius:4px;font-size:9px;width:110px;margin-top:3px" ' +
+        'onchange="updateTenantField(\'' + t.id + '\',\'subscription_end\',this.value)" title="Set subscription end date"></td>' +
         '<td><span class="' + (t.is_active ? 'status-active' : 'status-inactive') + '">' + (t.is_active ? '● Active' : '● Disabled') + '</span></td>' +
         '<td style="font-size:11px;color:var(--muted)">' + created + '</td>' +
         '<td><button class="action-btn' + (t.is_active ? ' danger' : '') + '" onclick="toggleTenantActive(\'' + t.id + '\',' + !t.is_active + ')">' + (t.is_active ? 'Disable' : 'Enable') + '</button></td>';
@@ -1618,6 +1645,26 @@ window.toggleTenantActive = async function(tenantId, newState) {
   }
 };
 
+// ── Update Any Tenant Field Inline ────────────────────
+window.updateTenantField = async function(tenantId, field, value) {
+  if(!_sb) return;
+  try {
+    var update = {};
+    update[field] = value;
+    var res = await _sb.from('tenants').update(update).eq('id', tenantId);
+    if(res.error) throw res.error;
+    var labels = { team_code: 'Team Code', max_reps: 'Max Reps', subscription_end: 'Subscription' };
+    showToast('✅ ' + (labels[field] || field) + ' updated');
+  } catch(e) {
+    if(e.message && e.message.includes('unique')) {
+      appAlert('❌ That value is already in use by another tenant.', '❌');
+    } else {
+      appAlert('❌ Update failed: ' + e.message, '❌');
+    }
+    loadAllTenants(); // revert to DB values
+  }
+};
+
 // ── Add New Tenant ────────────────────────────────────
 window.addNewTenant = async function() {
   var name = document.getElementById('ntName').value.trim();
@@ -1629,6 +1676,7 @@ window.addNewTenant = async function() {
   var maxReps = parseInt(document.getElementById('ntMaxReps').value) || 15;
   var adminPass = document.getElementById('ntAdminPass').value.trim();
   var superPass = document.getElementById('ntSuperPass').value.trim();
+  var subEnd = document.getElementById('ntSubEnd').value || null;
 
   if(!name) return showMsg('addTenantMsg','❌ Company name is required');
   if(!teamCode) return showMsg('addTenantMsg','❌ Team code is required');
@@ -1660,6 +1708,7 @@ window.addNewTenant = async function() {
       admin_hash: adminHash,
       super_hash: superHash,
       max_reps: maxReps,
+      subscription_end: subEnd,
       is_active: true
     });
 
@@ -1675,7 +1724,7 @@ window.addNewTenant = async function() {
 
     showMsg('addTenantMsg','✅ Tenant "' + name + '" created! Team Code: ' + teamCode, 'success');
     // Clear form
-    ['ntName','ntSubtitle','ntEmoji','ntTagline','ntTeamCode','ntAdminPass','ntSuperPass'].forEach(function(id) {
+    ['ntName','ntSubtitle','ntEmoji','ntTagline','ntTeamCode','ntAdminPass','ntSuperPass','ntSubEnd'].forEach(function(id) {
       document.getElementById(id).value = '';
     });
     document.getElementById('ntMaxReps').value = '15';
