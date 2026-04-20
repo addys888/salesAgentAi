@@ -8,39 +8,65 @@
 
 ```
 salesAgentAi/
-├── index.html          # Main app entry point
-├── styles.css          # All styles (dark theme, responsive)
-├── auth.js             # Authentication, multi-tenant, admin console
-├── dialer.js           # Dialer engine, sessions, exports, callbacks
-├── app.js              # App utilities and helpers
-├── templates.js        # WhatsApp message templates
-├── favicon.png         # App favicon
-├── CNAME               # GitHub Pages custom domain config
 │
-├── supabase/           # Database scripts
-│   ├── migration_multi_tenant.sql   # Initial schema + RLS
-│   ├── add_team_codes.sql           # Team code column setup
-│   └── add_client_xyz.sql           # XYZ Consulting tenant
+├── index.html              # App entry point (GitHub Pages)
+├── styles.css              # Styles (dark theme, responsive)
+├── auth.js                 # Auth, multi-tenant, admin console
+├── dialer.js               # Dialer engine, sessions, exports
+├── app.js                  # Utilities and helpers
+├── templates.js            # WhatsApp message templates
+├── favicon.png             # App favicon
+├── CNAME                   # GitHub Pages custom domain
 │
-└── clients/            # Client configs & onboarding docs
-    ├── _template/
-    │   └── onboarding.md            # Copy this for new clients
-    ├── dialkaro/
-    │   └── config.md                # Default demo tenant
-    └── xyz-consulting/
-        └── config.md                # XYZ Consulting config
+├── supabase/               # 📦 Database scripts
+│   ├── migration_multi_tenant.sql
+│   ├── add_team_codes.sql
+│   └── add_client_xyz.sql
+│
+├── clients/                # 🏢 Client configs (one folder per client)
+│   ├── _template/
+│   │   └── onboarding.md   #   ↳ Copy this for new clients
+│   ├── xyz-consulting/
+│   │   └── config.md       #   ↳ Credentials & branding
+│   └── ONBOARDING_GUIDE.md #   ↳ Full step-by-step process
+│
+└── docs/                   # 📄 Product documentation
+    └── PRODUCT_DEFAULT.md  #   ↳ Default tenant config (not a client)
+```
+
+## How Multi-Tenancy Works
+
+```
+Visitor opens dialkaro.celerapps.com
+         ↓
+    Landing page shows "DialKaro" (product branding)
+         ↓
+    ┌─────────────────────────────────────┐
+    │  Sales Rep clicks Register          │
+    │  Enters Team Code: "XYZ2026"        │
+    │  → System finds XYZ tenant          │
+    │  → Branding switches to XYZ         │
+    │  → Rep tagged with XYZ tenant_id    │
+    └─────────────────────────────────────┘
+    ┌─────────────────────────────────────┐
+    │  Manager logs in with XYZ password  │
+    │  → System matches admin_hash        │
+    │  → Branding switches to XYZ         │
+    │  → Only sees XYZ data               │
+    └─────────────────────────────────────┘
 ```
 
 ## Tech Stack
-- **Frontend**: Vanilla HTML/JS/CSS (no framework)
+- **Frontend**: Vanilla HTML/JS/CSS (no framework, no build step)
 - **Backend**: Supabase (Auth + PostgreSQL + RLS)
-- **Hosting**: GitHub Pages with custom domain
-- **Multi-Tenant**: Single codebase, single database, tenant isolation via RLS
+- **Hosting**: GitHub Pages + custom domain via CNAME
+- **Multi-Tenant**: Single codebase, single DB, tenant isolation via RLS + tenant_id
 
-## Onboarding a New Client
-1. Copy `clients/_template/` → `clients/new-client/`
-2. Fill in the branding and generate password hashes
-3. Run the SQL INSERT in Supabase
-4. Share URL + Team Code with the client
+## Onboarding a New Client (~10 min)
+1. Gather client info (name, branding, passwords)
+2. Generate SHA-256 hashes for passwords
+3. Run 1 SQL INSERT in Supabase
+4. Create `clients/new-client/config.md`
+5. Share URL + Team Code with client
 
-See `clients/_template/onboarding.md` for the full checklist.
+📖 **Full guide**: [clients/ONBOARDING_GUIDE.md](clients/ONBOARDING_GUIDE.md)
