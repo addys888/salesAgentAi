@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS tenants (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   slug TEXT UNIQUE NOT NULL,
-  hostname TEXT UNIQUE NOT NULL,
+  hostname TEXT NOT NULL,
   app_name TEXT NOT NULL DEFAULT 'DialKaro',
   app_subtitle TEXT DEFAULT 'Dial Faster · Close Smarter',
   app_emoji TEXT DEFAULT '☎️',
