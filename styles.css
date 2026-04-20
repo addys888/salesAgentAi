@@ -400,6 +400,17 @@ tr.current .jump-btn{display:none}
 .callback-sched{display:flex;gap:8px;align-items:center;margin-top:6px;padding-top:8px;border-top:1px solid var(--border2)}
 .callback-sched input[type=date],.callback-sched input[type=time]{background:var(--input-bg);border:1px solid var(--border2);border-radius:7px;padding:5px 8px;color:var(--text);font-family:'Inter',sans-serif;font-size:11px;outline:none}
 .callback-sched input:focus{border-color:var(--warn)}
+/* Callback banner — action buttons */
+.callback-banner .cb-item{flex-wrap:wrap}
+.callback-banner .cb-note{font-size:10px;color:var(--muted);font-style:italic;width:100%;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.callback-banner .cb-actions{display:flex;gap:5px;align-items:center;margin-left:auto;flex-shrink:0}
+.cb-call-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;font-size:14px;text-decoration:none;transition:all .2s;cursor:pointer;border:none}
+.cb-call-btn.wa{background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.25)}
+.cb-call-btn.wa:hover{background:rgba(37,211,102,.25);transform:scale(1.1)}
+.cb-call-btn.phone{background:rgba(100,181,246,.12);border:1px solid rgba(100,181,246,.25)}
+.cb-call-btn.phone:hover{background:rgba(100,181,246,.25);transform:scale(1.1)}
+.cb-done-btn{background:rgba(37,211,102,.1);color:var(--green);border:1px solid rgba(37,211,102,.2);border-radius:7px;width:28px;height:28px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:700;display:inline-flex;align-items:center;justify-content:center;transition:all .2s}
+.cb-done-btn:hover{background:rgba(37,211,102,.25);transform:scale(1.1)}
 
 /* ═══════════════════════════════════════════════
    F1 — ANALYTICS DASHBOARD

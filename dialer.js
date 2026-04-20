@@ -416,9 +416,7 @@ function showContact(i) {
   // F2: Clear note input
   var noteInp = document.getElementById('callNoteInput');
   if(noteInp) noteInp.value = '';
-  // F8: Hide callback scheduler
-  var cbSched = document.getElementById('callbackSchedRow');
-  if(cbSched) cbSched.style.display = 'none';
+  // F8: Callback scheduler is now a modal overlay (no inline element to hide)
   if(i >= contacts.length) { allDone(); return; }
   var anyPending = contacts.some(function(c){ return c.status === 'pending'; });
   if(!anyPending){ allDone(); return; }
@@ -466,24 +464,32 @@ window.nextContact = function() {
   // F7: Stop timer and record duration
   var dur = stopCallTimer();
   contacts[currentIndex].duration = dur;
-  // F2: Save call note
+  // F2: Save call note BEFORE anything else (preserve for callback)
   var noteInp = document.getElementById('callNoteInput');
-  if(noteInp) contacts[currentIndex].callNote = noteInp.value.trim();
+  var savedNote = noteInp ? noteInp.value.trim() : '';
+  contacts[currentIndex].callNote = savedNote;
   contacts[currentIndex].status = 'done'; contacts[currentIndex].outcome = currentOutcome;
   updateRowStatus(currentIndex,'done');
   var cell = document.getElementById('oc-cell-'+currentIndex);
   if(cell){ var L={interested:'\uD83D\uDFE2 Interested',callback:'\uD83D\uDD14 Callback',noanswer:'\uD83D\uDCF5 No Answer',notinterested:'\uD83D\uDD34 Not Interested','':'\u2014'}; cell.textContent=L[currentOutcome]||'\u2014'; }
   calledCount++;
-  // F8: If callback, schedule it
+  // F8: If callback, show scheduler modal BEFORE advancing
+  // The modal will call _advanceToNextContact() when dismissed
   if(currentOutcome === 'callback') {
-    scheduleCallbackPrompt(contacts[currentIndex]);
+    scheduleCallbackPrompt(contacts[currentIndex], savedNote);
+    return; // ← Don't advance yet! Modal handles it.
   }
+  _advanceToNextContact();
+};
+
+// Separated so the callback modal can call this after save/skip
+function _advanceToNextContact() {
   currentIndex = findNextPending();
   updateStats(); showContact(currentIndex);
   markDirty(); autoSaveSession();
   // Save daily stats on every 5th call
   if(calledCount % 5 === 0) saveDailyStats();
-};
+}
 
 window.skipContact = function() {
   stopCallTimer(); // F7: Stop timer on skip
@@ -1168,12 +1174,31 @@ window.exportExcel = function() {
 };
 
 // ════════════════════════════════════════════════════════
-//  F8: CALLBACK SCHEDULER
+//  F8: CALLBACK SCHEDULER (Modal-based — fixes race condition)
 // ════════════════════════════════════════════════════════
-function scheduleCallbackPrompt(contact) {
-  var schedRow = document.getElementById('callbackSchedRow');
-  if(!schedRow) return;
-  schedRow.style.display = 'flex';
+var _cbPendingContact = null;
+var _cbPendingNote = '';
+
+function scheduleCallbackPrompt(contact, savedNote) {
+  var modal = document.getElementById('cbModal');
+  if(!modal) { _advanceToNextContact(); return; }
+  // Store contact data for saveCallback
+  _cbPendingContact = contact;
+  _cbPendingNote = savedNote || '';
+  // Populate modal with contact info
+  var nameEl = document.getElementById('cbModalName');
+  var numEl = document.getElementById('cbModalNumber');
+  var noteEl = document.getElementById('cbModalNote');
+  if(nameEl) nameEl.textContent = contact.name || 'Unknown Contact';
+  if(numEl) numEl.textContent = contact.displayNum || ('+91 ' + contact.number);
+  if(noteEl) {
+    if(savedNote) {
+      noteEl.textContent = '📝 ' + savedNote;
+      noteEl.style.display = 'block';
+    } else {
+      noteEl.style.display = 'none';
+    }
+  }
   // Set default date to tomorrow
   var tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1181,34 +1206,49 @@ function scheduleCallbackPrompt(contact) {
   var timeInput = document.getElementById('cbTime');
   if(dateInput) dateInput.value = tomorrow.toISOString().split('T')[0];
   if(timeInput) timeInput.value = '10:00';
-  // Store contact for saving
-  schedRow.dataset.number = contact.number;
-  schedRow.dataset.name = contact.name || '';
+  // Open modal
+  modal.classList.add('open');
 }
 
 window.saveCallback = async function() {
-  var schedRow = document.getElementById('callbackSchedRow');
-  if(!schedRow || !_sb || !currentUser) return;
+  if(!_cbPendingContact) { skipCallback(); return; }
   var cbDate = document.getElementById('cbDate').value;
   var cbTime = document.getElementById('cbTime').value;
-  if(!cbDate) { showToast('Please select a date'); return; }
+  if(!cbDate) { showToast('❌ Please select a date', true); return; }
 
-  try {
-    await _sb.from('callbacks').insert({
-      user_id: currentUser.id,
-      contact_name: schedRow.dataset.name || '',
-      contact_number: schedRow.dataset.number || '',
-      callback_date: cbDate,
-      callback_time: cbTime || null,
-      note: document.getElementById('callNoteInput') ? document.getElementById('callNoteInput').value : '',
-      status: 'pending'
-    });
-    showToast('🔔 Callback scheduled for ' + cbDate);
-    schedRow.style.display = 'none';
-  } catch(e) {
-    console.warn('Callback save failed:', e.message);
-    showToast('Could not save callback - will try again');
+  // Save to Supabase
+  if(_sb && currentUser) {
+    try {
+      await _sb.from('callbacks').insert({
+        user_id: currentUser.id,
+        contact_name: _cbPendingContact.name || '',
+        contact_number: _cbPendingContact.number || '',
+        callback_date: cbDate,
+        callback_time: cbTime || null,
+        note: _cbPendingNote,
+        status: 'pending'
+      });
+      var dateStr = new Date(cbDate).toLocaleDateString('en-IN', {day:'numeric',month:'short'});
+      showToast('🔔 Callback scheduled for ' + dateStr + (cbTime ? ' at ' + cbTime : ''));
+    } catch(e) {
+      console.warn('Callback save failed:', e.message);
+      showToast('⚠️ Could not save callback — check connection', true);
+    }
+  } else {
+    showToast('⚠️ Not connected — callback not saved', true);
   }
+  // Close modal and advance
+  _cbPendingContact = null;
+  _cbPendingNote = '';
+  document.getElementById('cbModal').classList.remove('open');
+  _advanceToNextContact();
+};
+
+window.skipCallback = function() {
+  _cbPendingContact = null;
+  _cbPendingNote = '';
+  document.getElementById('cbModal').classList.remove('open');
+  _advanceToNextContact();
 };
 
 window.checkTodayCallbacks = async function() {
@@ -1260,16 +1300,47 @@ function showCallbackBanner(callbacks) {
     var time = document.createElement('span');
     time.className = 'cb-time';
     time.textContent = cb.callback_time ? cb.callback_time.substring(0,5) : 'Any time';
+    // Note preview
+    if(cb.note) {
+      var noteSpan = document.createElement('span');
+      noteSpan.className = 'cb-note';
+      noteSpan.textContent = cb.note.substring(0, 40) + (cb.note.length > 40 ? '…' : '');
+      noteSpan.title = cb.note;
+      item.appendChild(name);
+      item.appendChild(noteSpan);
+    } else {
+      item.appendChild(name);
+    }
+    item.appendChild(time);
+    // Action buttons: WhatsApp, Phone, Done
+    var actionsDiv = document.createElement('div');
+    actionsDiv.className = 'cb-actions';
+    var waNum = '91' + (cb.contact_number || '').replace(/^91/,'');
+    var waBtn = document.createElement('a');
+    waBtn.className = 'cb-call-btn wa';
+    waBtn.href = 'https://wa.me/' + waNum;
+    waBtn.target = '_blank';
+    waBtn.textContent = '📲';
+    waBtn.title = 'WhatsApp';
+    waBtn.onclick = function(e) { e.stopPropagation(); };
+    actionsDiv.appendChild(waBtn);
+    var phoneBtn = document.createElement('a');
+    phoneBtn.className = 'cb-call-btn phone';
+    phoneBtn.href = 'tel:+91' + (cb.contact_number || '');
+    phoneBtn.textContent = '📞';
+    phoneBtn.title = 'Phone Call';
+    phoneBtn.onclick = function(e) { e.stopPropagation(); };
+    actionsDiv.appendChild(phoneBtn);
     var doneBtn = document.createElement('button');
     doneBtn.className = 'cb-done-btn';
-    doneBtn.textContent = '✓ Done';
+    doneBtn.textContent = '✓';
+    doneBtn.title = 'Mark Done';
     doneBtn.onclick = function(e) {
       e.stopPropagation();
       markCallbackDone(cb.id, item);
     };
-    item.appendChild(name);
-    item.appendChild(time);
-    item.appendChild(doneBtn);
+    actionsDiv.appendChild(doneBtn);
+    item.appendChild(actionsDiv);
     list.appendChild(item);
   });
   banner.appendChild(list);

@@ -416,13 +416,7 @@
         <span class="section-lbl">📝 Note:</span>
         <input id="callNoteInput" placeholder="Add call notes...">
       </div>
-      <!-- F8: Callback Scheduler (hidden by default) -->
-      <div class="callback-sched" id="callbackSchedRow" style="display:none;padding:10px 20px;border-bottom:1px solid var(--border2)">
-        <span class="section-lbl">📅 Schedule:</span>
-        <input type="date" id="cbDate">
-        <input type="time" id="cbTime" value="10:00">
-        <button class="btn btn-confirm" onclick="saveCallback()" style="font-size:10px;padding:5px 10px">💾 Save</button>
-      </div>
+      <!-- F8: Callback Scheduler (removed — now uses modal overlay below) -->
       <!-- F4: Search & Filter -->
       <div class="search-bar">
         <input id="queueSearch" placeholder="🔍 Search name or number..." oninput="filterQueue()">
@@ -557,6 +551,44 @@
       <span style="color:var(--muted);font-size:11px">Your data is safe and will be restored upon renewal</span>
     </div>
     <button class="auth-btn green" style="margin-top:20px" onclick="appLogout()">← Back to Login</button>
+  </div>
+</div>
+
+<!-- CALLBACK SCHEDULING MODAL (F8) -->
+<div class="modal-overlay" id="cbModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <span>📅</span>
+      <h3>Schedule Follow-Up Callback</h3>
+      <button class="modal-close" onclick="skipCallback()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:16px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Contact Details</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--green-dark),var(--green));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔔</div>
+          <div>
+            <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--text)" id="cbModalName">—</div>
+            <div style="font-family:'Inter',sans-serif;font-size:12px;color:var(--muted);letter-spacing:1px" id="cbModalNumber">—</div>
+          </div>
+        </div>
+        <div id="cbModalNote" style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic;display:none"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field-group">
+          <label>📅 Callback Date</label>
+          <input type="date" class="field-input" id="cbDate">
+        </div>
+        <div class="field-group">
+          <label>🕐 Preferred Time</label>
+          <input type="time" class="field-input" id="cbTime" value="10:00">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="skipCallback()">⏭ Skip · No Reminder</button>
+      <button class="btn btn-confirm" onclick="saveCallback()">💾 Save Callback</button>
+    </div>
   </div>
 </div>
 
