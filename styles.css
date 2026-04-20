@@ -411,6 +411,16 @@ tr.current .jump-btn{display:none}
 .cb-call-btn.phone:hover{background:rgba(100,181,246,.25);transform:scale(1.1)}
 .cb-done-btn{background:rgba(37,211,102,.1);color:var(--green);border:1px solid rgba(37,211,102,.2);border-radius:7px;width:28px;height:28px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:700;display:inline-flex;align-items:center;justify-content:center;transition:all .2s}
 .cb-done-btn:hover{background:rgba(37,211,102,.25);transform:scale(1.1)}
+/* Callback banner — layout */
+.callback-banner .cb-item{flex-direction:column;gap:0;padding:0;overflow:hidden}
+.callback-banner .cb-top-row{display:flex;align-items:center;gap:8px;padding:8px 12px;width:100%}
+.callback-banner .cb-note-row{display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,171,64,.05);border-top:1px solid rgba(255,171,64,.12);width:100%}
+.callback-banner .cb-note-icon{font-size:12px;flex-shrink:0}
+.callback-banner .cb-note-input{flex:1;background:var(--input-bg);border:1px solid var(--border2);border-radius:7px;padding:5px 10px;color:var(--text);font-family:'Inter',sans-serif;font-size:11px;outline:none;transition:border .2s}
+.callback-banner .cb-note-input:focus{border-color:var(--warn)}
+.callback-banner .cb-note-input::placeholder{color:var(--muted);font-style:italic}
+.cb-call-btn.note-toggle{background:rgba(255,171,64,.12);border:1px solid rgba(255,171,64,.25)}
+.cb-call-btn.note-toggle:hover{background:rgba(255,171,64,.25);transform:scale(1.1)}
 
 /* ═══════════════════════════════════════════════
    F1 — ANALYTICS DASHBOARD

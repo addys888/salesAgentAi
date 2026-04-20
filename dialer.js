@@ -1294,25 +1294,18 @@ function showCallbackBanner(callbacks) {
   callbacks.slice(0, 5).forEach(function(cb) {
     var item = document.createElement('div');
     item.className = 'cb-item';
+    // Top row: name + time + actions
+    var topRow = document.createElement('div');
+    topRow.className = 'cb-top-row';
     var name = document.createElement('span');
     name.className = 'cb-name';
     name.textContent = (cb.contact_name || '+91 ' + cb.contact_number);
+    topRow.appendChild(name);
     var time = document.createElement('span');
     time.className = 'cb-time';
     time.textContent = cb.callback_time ? cb.callback_time.substring(0,5) : 'Any time';
-    // Note preview
-    if(cb.note) {
-      var noteSpan = document.createElement('span');
-      noteSpan.className = 'cb-note';
-      noteSpan.textContent = cb.note.substring(0, 40) + (cb.note.length > 40 ? '…' : '');
-      noteSpan.title = cb.note;
-      item.appendChild(name);
-      item.appendChild(noteSpan);
-    } else {
-      item.appendChild(name);
-    }
-    item.appendChild(time);
-    // Action buttons: WhatsApp, Phone, Done
+    topRow.appendChild(time);
+    // Action buttons: WhatsApp, Phone, Note, Done
     var actionsDiv = document.createElement('div');
     actionsDiv.className = 'cb-actions';
     var waNum = '91' + (cb.contact_number || '').replace(/^91/,'');
@@ -1331,16 +1324,63 @@ function showCallbackBanner(callbacks) {
     phoneBtn.title = 'Phone Call';
     phoneBtn.onclick = function(e) { e.stopPropagation(); };
     actionsDiv.appendChild(phoneBtn);
+    var noteToggle = document.createElement('button');
+    noteToggle.className = 'cb-call-btn note-toggle';
+    noteToggle.textContent = '📝';
+    noteToggle.title = 'Add/Edit Note';
+    noteToggle.onclick = function(e) {
+      e.stopPropagation();
+      var noteRow = item.querySelector('.cb-note-row');
+      if(noteRow) {
+        var isOpen = noteRow.style.display !== 'none';
+        noteRow.style.display = isOpen ? 'none' : 'flex';
+        if(!isOpen) noteRow.querySelector('input').focus();
+      }
+    };
+    actionsDiv.appendChild(noteToggle);
     var doneBtn = document.createElement('button');
     doneBtn.className = 'cb-done-btn';
     doneBtn.textContent = '✓';
     doneBtn.title = 'Mark Done';
     doneBtn.onclick = function(e) {
       e.stopPropagation();
-      markCallbackDone(cb.id, item);
+      // Grab latest note before marking done
+      var noteInput = item.querySelector('.cb-note-input');
+      var latestNote = noteInput ? noteInput.value.trim() : '';
+      markCallbackDone(cb.id, item, latestNote);
     };
     actionsDiv.appendChild(doneBtn);
-    item.appendChild(actionsDiv);
+    topRow.appendChild(actionsDiv);
+    item.appendChild(topRow);
+
+    // Note row (expandable — hidden by default, shows existing note or empty input)
+    var noteRow = document.createElement('div');
+    noteRow.className = 'cb-note-row';
+    noteRow.style.display = cb.note ? 'flex' : 'none'; // Show if note already exists
+    var noteIcon = document.createElement('span');
+    noteIcon.className = 'cb-note-icon';
+    noteIcon.textContent = '📝';
+    noteRow.appendChild(noteIcon);
+    var noteInput = document.createElement('input');
+    noteInput.className = 'cb-note-input';
+    noteInput.placeholder = 'Add follow-up notes...';
+    noteInput.value = cb.note || '';
+    // Auto-save note on blur
+    noteInput.addEventListener('blur', function() {
+      var newNote = noteInput.value.trim();
+      if(newNote !== (cb.note || '')) {
+        updateCallbackNote(cb.id, newNote);
+        cb.note = newNote;
+      }
+    });
+    // Save on Enter key
+    noteInput.addEventListener('keydown', function(ev) {
+      if(ev.key === 'Enter') { noteInput.blur(); }
+    });
+    noteInput.onclick = function(e) { e.stopPropagation(); };
+    noteRow.appendChild(noteInput);
+    item.appendChild(noteRow);
+
     list.appendChild(item);
   });
   banner.appendChild(list);
@@ -1350,11 +1390,25 @@ function showCallbackBanner(callbacks) {
   if(container && uploadZone) container.insertBefore(banner, uploadZone);
 }
 
-async function markCallbackDone(cbId, itemEl) {
+// Update callback note in Supabase
+async function updateCallbackNote(cbId, newNote) {
   if(!_sb) return;
   try {
-    await _sb.from('callbacks').update({ status: 'done' }).eq('id', cbId);
-    if(itemEl) { itemEl.style.opacity = '0.3'; itemEl.style.textDecoration = 'line-through'; }
+    await _sb.from('callbacks').update({ note: newNote }).eq('id', cbId);
+    showToast('📝 Note saved');
+  } catch(e) { console.warn('Note update:', e.message); }
+}
+
+async function markCallbackDone(cbId, itemEl, latestNote) {
+  if(!_sb) return;
+  try {
+    var updateData = { status: 'done' };
+    if(latestNote !== undefined && latestNote !== '') updateData.note = latestNote;
+    await _sb.from('callbacks').update(updateData).eq('id', cbId);
+    if(itemEl) {
+      itemEl.style.opacity = '0.3';
+      itemEl.querySelector('.cb-top-row').style.textDecoration = 'line-through';
+    }
     showToast('✓ Callback marked done');
   } catch(e) { console.warn('Callback update:', e.message); }
 }
