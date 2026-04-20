@@ -174,7 +174,11 @@ async function loadTenantConfig() {
     SUPER_HASH = res.data.super_hash || SUPER_HASH;
     MAX_REPS   = res.data.max_reps || MAX_REPS;
     // Apply branding
-    if(res.data.app_name)       APP_CONFIG.appName = res.data.app_name;
+    if(res.data.app_name) {
+      APP_CONFIG.appName = res.data.app_name;
+      APP_CONFIG.dialerTitle = res.data.app_name;
+      APP_CONFIG.adminDashTitle = res.data.app_name + ' Console';
+    }
     if(res.data.app_subtitle)   APP_CONFIG.appSubtitle = res.data.app_subtitle;
     if(res.data.app_emoji)      APP_CONFIG.appEmoji = res.data.app_emoji;
     if(res.data.landing_title)  APP_CONFIG.landingTitle = res.data.landing_title;
@@ -394,7 +398,11 @@ window.userRegister = async function() {
       SUPER_HASH = tcRes.data.super_hash || SUPER_HASH;
       MAX_REPS = tcRes.data.max_reps || MAX_REPS;
       // Apply tenant branding immediately
-      if(tcRes.data.app_name)       APP_CONFIG.appName = tcRes.data.app_name;
+      if(tcRes.data.app_name) {
+        APP_CONFIG.appName = tcRes.data.app_name;
+        APP_CONFIG.dialerTitle = tcRes.data.app_name;
+        APP_CONFIG.adminDashTitle = tcRes.data.app_name + ' Console';
+      }
       if(tcRes.data.app_subtitle)   APP_CONFIG.appSubtitle = tcRes.data.app_subtitle;
       if(tcRes.data.app_emoji)      APP_CONFIG.appEmoji = tcRes.data.app_emoji;
       if(tcRes.data.landing_title)  APP_CONFIG.landingTitle = tcRes.data.landing_title;
@@ -668,7 +676,11 @@ async function loadUserTenant() {
     ADMIN_HASH = tenRes.data.admin_hash || ADMIN_HASH;
     SUPER_HASH = tenRes.data.super_hash || SUPER_HASH;
     MAX_REPS = tenRes.data.max_reps || MAX_REPS;
-    if(tenRes.data.app_name)       APP_CONFIG.appName = tenRes.data.app_name;
+    if(tenRes.data.app_name) {
+      APP_CONFIG.appName = tenRes.data.app_name;
+      APP_CONFIG.dialerTitle = tenRes.data.app_name;
+      APP_CONFIG.adminDashTitle = tenRes.data.app_name + ' Console';
+    }
     if(tenRes.data.app_subtitle)   APP_CONFIG.appSubtitle = tenRes.data.app_subtitle;
     if(tenRes.data.app_emoji)      APP_CONFIG.appEmoji = tenRes.data.app_emoji;
     if(tenRes.data.landing_title)  APP_CONFIG.landingTitle = tenRes.data.landing_title;
