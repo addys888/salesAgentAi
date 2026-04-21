@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>DialKaro — Mobile Promo Banner</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',sans-serif; background:#070b09; color:#fff; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+.banner {
+  width:1200px; height:630px; background:linear-gradient(135deg,#060a08 0%,#0a1210 40%,#081510 100%);
+  border-radius:0; position:relative; overflow:hidden; display:flex; padding:40px 50px;
+}
+.banner::before {
+  content:''; position:absolute; width:500px; height:500px; border-radius:50%;
+  background:radial-gradient(circle,rgba(37,211,102,.08),transparent 70%);
+  top:-100px; left:-100px;
+}
+.banner::after {
+  content:''; position:absolute; width:400px; height:400px; border-radius:50%;
+  background:radial-gradient(circle,rgba(37,211,102,.05),transparent 70%);
+  bottom:-150px; right:100px;
+}
+
+/* LEFT SIDE — Phone Mockup */
+.phone-side { width:380px; flex-shrink:0; position:relative; z-index:2; display:flex; align-items:center; justify-content:center; }
+.phone-frame {
+  width:260px; height:520px; background:#111; border-radius:36px; border:3px solid #2a2a2a;
+  overflow:hidden; position:relative; box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 40px rgba(37,211,102,.1);
+}
+.phone-notch {
+  width:100px; height:24px; background:#0a0a0a; border-radius:0 0 14px 14px; margin:0 auto;
+  position:relative; z-index:10;
+}
+.phone-screen { padding:8px 12px; font-size:10px; }
+.phone-header {
+  display:flex; align-items:center; gap:8px; padding:8px 0 12px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.phone-header .logo { font-size:18px; }
+.phone-header h3 { font-size:13px; font-weight:800; color:#25D366; }
+.phone-header .badge { font-size:7px; background:rgba(37,211,102,.15); color:#25D366; padding:2px 6px; border-radius:10px; margin-left:auto; }
+
+.contact-card {
+  background:rgba(37,211,102,.06); border:1px solid rgba(37,211,102,.15); border-radius:12px;
+  padding:12px; margin:10px 0;
+}
+.contact-card .name { font-size:13px; font-weight:700; color:#fff; }
+.contact-card .phone { font-size:11px; color:#25D366; margin-top:2px; font-family:monospace; }
+.contact-card .company { font-size:9px; color:rgba(255,255,255,.4); margin-top:1px; }
+.dialer-btns { display:flex; gap:8px; margin:8px 0; }
+.dialer-btns .btn-call { flex:1; padding:10px; background:linear-gradient(135deg,#25D366,#128C7E); color:#fff; border:none; border-radius:10px; font-weight:800; font-size:11px; text-align:center; }
+.dialer-btns .btn-skip { flex:1; padding:10px; background:rgba(255,82,82,.15); color:#ff5252; border:1px solid rgba(255,82,82,.3); border-radius:10px; font-weight:700; font-size:11px; text-align:center; }
+.timer-bar { text-align:center; padding:6px; font-size:20px; font-weight:800; color:#25D366; letter-spacing:2px; }
+.queue-label { font-size:8px; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,.3); margin:8px 0 6px; }
+.queue-item {
+  display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
+  background:rgba(255,255,255,.03); margin-bottom:4px;
+}
+.queue-item .av { width:22px; height:22px; border-radius:50%; background:rgba(37,211,102,.15); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:#25D366; }
+.queue-item .qname { font-size:9px; font-weight:600; color:rgba(255,255,255,.7); }
+.queue-item .qphone { font-size:8px; color:rgba(255,255,255,.3); }
+.queue-item .qstatus { margin-left:auto; font-size:7px; padding:2px 5px; border-radius:6px; }
+.qstatus.pending { background:rgba(255,171,64,.1); color:#ffab40; }
+.qstatus.done { background:rgba(37,211,102,.1); color:#25D366; }
+
+/* RIGHT SIDE — Features */
+.features-side { flex:1; padding-left:50px; display:flex; flex-direction:column; justify-content:center; position:relative; z-index:2; }
+.brand-top { margin-bottom:30px; }
+.brand-top .emoji { font-size:36px; margin-bottom:8px; display:block; }
+.brand-top h1 { font-size:48px; font-weight:900; color:#25D366; letter-spacing:-1px; line-height:1; }
+.brand-top p { font-size:16px; color:rgba(255,255,255,.5); margin-top:8px; letter-spacing:.5px; }
+
+.features-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; }
+.feature {
+  display:flex; align-items:center; gap:10px; padding:8px 14px;
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06);
+  border-radius:10px; transition:all .3s;
+}
+.feature .icon { font-size:18px; flex-shrink:0; }
+.feature .label { font-size:12px; font-weight:600; color:rgba(255,255,255,.85); }
+
+.brand-bottom {
+  margin-top:auto; padding-top:24px;
+  font-size:12px; color:rgba(255,255,255,.3); letter-spacing:.5px;
+}
+.brand-bottom span { color:rgba(37,211,102,.6); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="banner">
+
+  <!-- LEFT: Phone Mockup -->
+  <div class="phone-side">
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="phone-header">
+          <span class="logo">☎️</span>
+          <h3>DialKaro</h3>
+          <span class="badge">LIVE</span>
+        </div>
+        <div class="contact-card">
+          <div class="name">Priya Sharma</div>
+          <div class="phone">+91 98765 43210</div>
+          <div class="company">Skyline Realty · Mumbai</div>
+        </div>
+        <div class="timer-bar">02:34</div>
+        <div class="dialer-btns">
+          <div class="btn-call">📞 Call</div>
+          <div class="btn-skip">⏭ Skip</div>
+        </div>
+        <div class="queue-label">📋 Up Next (3 of 48)</div>
+        <div class="queue-item">
+          <div class="av">RS</div>
+          <div><div class="qname">Rahul Singh</div><div class="qphone">+91 87654 32109</div></div>
+          <span class="qstatus pending">Pending</span>
+        </div>
+        <div class="queue-item">
+          <div class="av">AK</div>
+          <div><div class="qname">Amit Kumar</div><div class="qphone">+91 76543 21098</div></div>
+          <span class="qstatus pending">Pending</span>
+        </div>
+        <div class="queue-item">
+          <div class="av">NK</div>
+          <div><div class="qname">Neha Kapoor</div><div class="qphone">+91 65432 10987</div></div>
+          <span class="qstatus done">✓ Called</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Features -->
+  <div class="features-side">
+    <div class="brand-top">
+      <span class="emoji">☎️</span>
+      <h1>DialKaro</h1>
+      <p>Your Team's Calling Command Centre</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature"><span class="icon">📲</span><span class="label">Auto-Dialer Engine</span></div>
+      <div class="feature"><span class="icon">📋</span><span class="label">Excel/CSV Lead Upload</span></div>
+      <div class="feature"><span class="icon">⏱️</span><span class="label">Session Management</span></div>
+      <div class="feature"><span class="icon">🔄</span><span class="label">Callback Auto Follow-up</span></div>
+      <div class="feature"><span class="icon">🏆</span><span class="label">Leaderboard Dashboard</span></div>
+      <div class="feature"><span class="icon">🤖</span><span class="label">AI Call Reporting</span></div>
+      <div class="feature"><span class="icon">📱</span><span class="label">Cross-Device Support</span></div>
+      <div class="feature"><span class="icon">🌍</span><span class="label">International Numbers</span></div>
+      <div class="feature"><span class="icon">📝</span><span class="label">On-Call Notes & Tags</span></div>
+      <div class="feature"><span class="icon">💬</span><span class="label">WhatsApp Templates</span></div>
+      <div class="feature"><span class="icon">📊</span><span class="label">Live Analytics</span></div>
+      <div class="feature"><span class="icon">🔒</span><span class="label">Multi-Tenant Security</span></div>
+    </div>
+
+    <div class="brand-bottom">
+      dialkaro.celerapps.com · <span>Powered by CelerApps</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
