@@ -624,11 +624,11 @@ function markDirty() {
   }, _IDLE_LIMIT);
 }
 
+// H-5 FIX: Only clear _isDirty after successful save (not before)
 async function autoSaveSession() {
   if(!currentUser || !_sb || !contacts.length) return;
   if(!_isDirty) return;
   if(_isSaving) return;
-  _isDirty = false;
   _isSaving = true;
   try {
     var payload = {
@@ -651,9 +651,10 @@ async function autoSaveSession() {
       if(res.error) throw res.error;
       if(res.data) _activeSessionId = res.data.id;
     }
+    _isDirty = false; // H-5 FIX: Only clear after success
     console.log('Session saved ✓ index:', currentIndex);
   } catch(e) {
-    _isDirty = true;
+    // _isDirty stays true so next call will retry
     console.warn('Auto-save failed (will retry):', e.message);
   }
   _isSaving = false;
@@ -1446,19 +1447,26 @@ async function markCallbackDone(cbId, itemEl, latestNote) {
   } catch(e) { console.warn('Callback update:', e.message); }
 }
 
-// ════════════════════════════════════════════════════════
-//  F1: SAVE DAILY STATS (for admin analytics)
-// ════════════════════════════════════════════════════════
+// H-8 FIX: Accumulate stats instead of overwriting previous sessions on same day
 async function saveDailyStats() {
   if(!_sb || !currentUser || !contacts.length) return;
   var oc = contacts.reduce(function(a,c){ a[c.outcome]=(a[c.outcome]||0)+1; return a; },{});
   var calledList = contacts.filter(function(c){ return c.status==='done' && c.duration > 0; });
   var avgDur = calledList.length ? Math.round(calledList.reduce(function(s,c){ return s+c.duration; },0)/calledList.length) : 0;
 
+  var today = new Date().toISOString().split('T')[0];
+
   try {
+    // Check for existing stats row for this user+date
+    var existing = await _sb.from('daily_stats')
+      .select('called, skipped, interested, callback, noanswer, notinterested, total_leads, avg_call_duration')
+      .eq('user_id', currentUser.id)
+      .eq('stat_date', today)
+      .maybeSingle();
+
     var statsPayload = {
       user_id: currentUser.id,
-      stat_date: new Date().toISOString().split('T')[0],
+      stat_date: today,
       total_leads: contacts.length,
       called: calledCount,
       skipped: skippedCount,
@@ -1468,6 +1476,25 @@ async function saveDailyStats() {
       notinterested: oc.notinterested || 0,
       avg_call_duration: avgDur
     };
+
+    // If existing row found, accumulate with max to prevent double-counting
+    if(!existing.error && existing.data) {
+      var ex = existing.data;
+      statsPayload.called = Math.max(ex.called || 0, calledCount);
+      statsPayload.skipped = Math.max(ex.skipped || 0, skippedCount);
+      statsPayload.interested = Math.max(ex.interested || 0, oc.interested || 0);
+      statsPayload.callback = Math.max(ex.callback || 0, oc.callback || 0);
+      statsPayload.noanswer = Math.max(ex.noanswer || 0, oc.noanswer || 0);
+      statsPayload.notinterested = Math.max(ex.notinterested || 0, oc.notinterested || 0);
+      statsPayload.total_leads = Math.max(ex.total_leads || 0, contacts.length);
+      // Weighted average duration
+      if(avgDur > 0 && ex.avg_call_duration > 0) {
+        statsPayload.avg_call_duration = Math.round((ex.avg_call_duration + avgDur) / 2);
+      } else {
+        statsPayload.avg_call_duration = avgDur || ex.avg_call_duration || 0;
+      }
+    }
+
     // Multi-tenant: tag stats with tenant
     if(typeof currentTenant !== 'undefined' && currentTenant) statsPayload.tenant_id = currentTenant.id;
     await _sb.from('daily_stats').upsert(statsPayload, { onConflict: 'user_id,stat_date' });

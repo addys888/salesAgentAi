@@ -386,12 +386,13 @@ window.showAdminAuth = function() {
 window.backToLanding = function() {
   document.getElementById('userAuthScreen').classList.remove('visible');
   document.getElementById('adminAuthScreen').classList.remove('visible');
+  document.getElementById('superAuthScreen').classList.remove('visible'); // H-4 FIX
   document.getElementById('landingScreen').style.display = 'flex';
   clearMsgs();
 };
 
 function clearMsgs() {
-  ['loginMsg','registerMsg','otpMsg','adminMsg'].forEach(function(id){
+  ['loginMsg','registerMsg','otpMsg','adminMsg','superAdminMsg'].forEach(function(id){
     var el = document.getElementById(id);
     if(el){ el.textContent=''; el.className='auth-msg'; }
   });
@@ -916,6 +917,7 @@ window.adminLogin = async function() {
       var subCheck = checkTenantSubscription(currentTenant);
       if(subCheck.blocked) {
         showMsg('adminMsg','🔒 ' + subCheck.message);
+        if(btn) { btn.disabled = false; btn.textContent = 'Access Admin Panel →'; } // H-3 FIX
         return;
       }
       _adminAttempts = 0;
@@ -1602,6 +1604,12 @@ window.loadLeaderboard = async function(days) {
 // Default SUPER_HASH (hardcoded in auth.js line 61) is the CelerApps master key
 var CELERAPPS_SUPER_HASH = '87859159d3dcdf468afe630139ba14d72603a795a085c25ca60c1ad6c3c154b7';
 
+// H-7 FIX: Rate limiting for super admin login
+var _superAttempts = 0;
+var _superLockedUntil = 0;
+var SUPER_MAX_ATTEMPTS = 3;
+var SUPER_LOCKOUT_MS = 60000; // 60 seconds
+
 // Triple-click footer to reveal super admin login
 (function() {
   var clickCount = 0;
@@ -1628,12 +1636,29 @@ window.showSuperAuth = function() {
 // C-1 FIX: Removed duplicate sha256() — already defined at line 78
 
 window.superAdminLogin = async function() {
+  // H-7 FIX: Rate limiting check
+  if(Date.now() < _superLockedUntil) {
+    var secsLeft = Math.ceil((_superLockedUntil - Date.now()) / 1000);
+    showMsg('superAdminMsg','🔒 Too many failed attempts. Try again in ' + secsLeft + 's');
+    return;
+  }
   var pass = document.getElementById('superAdminPass').value;
   if(!pass) return showMsg('superAdminMsg','❌ Enter the super admin password');
   var hash = await sha256(pass);
   if(hash !== CELERAPPS_SUPER_HASH) {
-    return showMsg('superAdminMsg','❌ Invalid password. This is for CelerApps admins only.');
+    _superAttempts++;
+    var remaining = SUPER_MAX_ATTEMPTS - _superAttempts;
+    if(_superAttempts >= SUPER_MAX_ATTEMPTS) {
+      _superLockedUntil = Date.now() + SUPER_LOCKOUT_MS;
+      _superAttempts = 0;
+      showMsg('superAdminMsg','🔒 Too many failed attempts. Locked for 60 seconds.');
+    } else {
+      showMsg('superAdminMsg','❌ Invalid password. ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining.');
+    }
+    document.getElementById('superAdminPass').value = '';
+    return;
   }
+  _superAttempts = 0;
   document.getElementById('superAuthScreen').classList.remove('visible');
   document.getElementById('superPanel').style.display = 'block';
   loadAllTenants();
@@ -1688,9 +1713,9 @@ window.loadAllTenants = async function() {
     document.getElementById('sStatCalls').textContent = totalCalls;
     document.getElementById('sStatActive').textContent = activeToday;
 
-    // Render table
+    // H-1 FIX: Render table with safe DOM construction (no innerHTML with user data)
     var body = document.getElementById('tenantsTableBody');
-    body.innerHTML = '';
+    body.textContent = '';
     tenants.forEach(function(t) {
       var reps = repCounts[t.id] || 0;
       var created = t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'2-digit' }) : '—';
@@ -1711,27 +1736,106 @@ window.loadAllTenants = async function() {
       }
 
       var tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td><span class="tenant-emoji">' + (t.app_emoji || '📱') + '</span>' +
-        '<span class="tenant-name">' + (t.app_name || t.slug) + '</span><br>' +
-        '<span class="tenant-slug">' + t.slug + '</span></td>' +
-        // Editable Team Code
-        '<td><input type="text" value="' + (t.team_code || '') + '" ' +
-        'style="background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.2);color:var(--warn);padding:3px 8px;border-radius:4px;font-size:11px;width:90px;text-transform:uppercase;font-family:monospace" ' +
-        'onchange="updateTenantField(\'' + t.id + '\',\'team_code\',this.value.toUpperCase())" title="Edit team code"></td>' +
-        '<td style="font-weight:700">' + reps + '</td>' +
-        // Editable Max Reps
-        '<td><input type="number" value="' + (t.max_reps || 10) + '" min="1" max="500" ' +
-        'style="background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:4px;font-size:12px;width:55px;text-align:center" ' +
-        'onchange="updateTenantField(\'' + t.id + '\',\'max_reps\',parseInt(this.value))" title="Edit max reps"></td>' +
-        // Subscription
-        '<td><span style="color:' + subColor + ';font-weight:600;font-size:11px">' + subDays + '</span><br>' +
-        '<input type="date" value="' + (t.subscription_end || '') + '" ' +
-        'style="background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--muted);padding:2px 4px;border-radius:4px;font-size:9px;width:110px;margin-top:3px" ' +
-        'onchange="updateTenantField(\'' + t.id + '\',\'subscription_end\',this.value)" title="Set subscription end date"></td>' +
-        '<td><span class="' + (t.is_active ? 'status-active' : 'status-inactive') + '">' + (t.is_active ? '● Active' : '● Disabled') + '</span></td>' +
-        '<td style="font-size:11px;color:var(--muted)">' + created + '</td>' +
-        '<td><button class="action-btn' + (t.is_active ? ' danger' : '') + '" onclick="toggleTenantActive(\'' + t.id + '\',' + !t.is_active + ')">' + (t.is_active ? 'Disable' : 'Enable') + '</button></td>';
+
+      // Tenant name cell
+      var tdTenant = document.createElement('td');
+      var emojiSpan = document.createElement('span');
+      emojiSpan.className = 'tenant-emoji';
+      emojiSpan.textContent = t.app_emoji || '📱';
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'tenant-name';
+      nameSpan.textContent = t.app_name || t.slug;
+      var slugSpan = document.createElement('span');
+      slugSpan.className = 'tenant-slug';
+      slugSpan.textContent = t.slug;
+      tdTenant.appendChild(emojiSpan);
+      tdTenant.appendChild(nameSpan);
+      tdTenant.appendChild(document.createElement('br'));
+      tdTenant.appendChild(slugSpan);
+      tr.appendChild(tdTenant);
+
+      // Team Code cell (editable)
+      var tdCode = document.createElement('td');
+      var codeInput = document.createElement('input');
+      codeInput.type = 'text';
+      codeInput.value = t.team_code || '';
+      codeInput.style.cssText = 'background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.2);color:var(--warn);padding:3px 8px;border-radius:4px;font-size:11px;width:90px;text-transform:uppercase;font-family:monospace';
+      codeInput.title = 'Edit team code';
+      codeInput.dataset.tenantId = t.id;
+      codeInput.addEventListener('change', function(e) {
+        updateTenantField(e.target.dataset.tenantId, 'team_code', e.target.value.toUpperCase());
+      });
+      tdCode.appendChild(codeInput);
+      tr.appendChild(tdCode);
+
+      // Reps count cell
+      var tdReps = document.createElement('td');
+      tdReps.style.fontWeight = '700';
+      tdReps.textContent = reps;
+      tr.appendChild(tdReps);
+
+      // Max Reps cell (editable)
+      var tdMax = document.createElement('td');
+      var maxInput = document.createElement('input');
+      maxInput.type = 'number';
+      maxInput.value = t.max_reps || 10;
+      maxInput.min = 1;
+      maxInput.max = 500;
+      maxInput.style.cssText = 'background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:4px;font-size:12px;width:55px;text-align:center';
+      maxInput.title = 'Edit max reps';
+      maxInput.dataset.tenantId = t.id;
+      maxInput.addEventListener('change', function(e) {
+        updateTenantField(e.target.dataset.tenantId, 'max_reps', parseInt(e.target.value));
+      });
+      tdMax.appendChild(maxInput);
+      tr.appendChild(tdMax);
+
+      // Subscription cell
+      var tdSub = document.createElement('td');
+      var subSpan = document.createElement('span');
+      subSpan.style.cssText = 'color:' + subColor + ';font-weight:600;font-size:11px';
+      subSpan.textContent = subDays;
+      tdSub.appendChild(subSpan);
+      tdSub.appendChild(document.createElement('br'));
+      var subInput = document.createElement('input');
+      subInput.type = 'date';
+      subInput.value = t.subscription_end || '';
+      subInput.style.cssText = 'background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--muted);padding:2px 4px;border-radius:4px;font-size:9px;width:110px;margin-top:3px';
+      subInput.title = 'Set subscription end date';
+      subInput.dataset.tenantId = t.id;
+      subInput.addEventListener('change', function(e) {
+        updateTenantField(e.target.dataset.tenantId, 'subscription_end', e.target.value);
+      });
+      tdSub.appendChild(subInput);
+      tr.appendChild(tdSub);
+
+      // Status cell
+      var tdStatus = document.createElement('td');
+      var statusSpan = document.createElement('span');
+      statusSpan.className = t.is_active ? 'status-active' : 'status-inactive';
+      statusSpan.textContent = t.is_active ? '● Active' : '● Disabled';
+      tdStatus.appendChild(statusSpan);
+      tr.appendChild(tdStatus);
+
+      // Created cell
+      var tdCreated = document.createElement('td');
+      tdCreated.style.cssText = 'font-size:11px;color:var(--muted)';
+      tdCreated.textContent = created;
+      tr.appendChild(tdCreated);
+
+      // Actions cell
+      var tdActions = document.createElement('td');
+      var actionBtn = document.createElement('button');
+      actionBtn.className = 'action-btn' + (t.is_active ? ' danger' : '');
+      actionBtn.textContent = t.is_active ? 'Disable' : 'Enable';
+      actionBtn.dataset.tenantId = t.id;
+      actionBtn.dataset.newState = !t.is_active;
+      actionBtn.addEventListener('click', function(e) {
+        toggleTenantActive(e.target.dataset.tenantId, e.target.dataset.newState === 'true');
+      });
+      tdActions.appendChild(actionBtn);
+      tr.appendChild(tdActions);
+
       body.appendChild(tr);
     });
   } catch(e) {
@@ -1882,21 +1986,51 @@ window.loadGlobalStats = async function() {
       }
     });
 
+    // H-2 FIX: Safe DOM construction for global stats (no innerHTML with user data)
     var body = document.getElementById('globalStatsBody');
-    body.innerHTML = '';
+    body.textContent = '';
     tenants.forEach(function(t) {
       var reps = repCounts[t.id] || 0;
       var st = tenantStats[t.id] || { calls: 0, interested: 0, callbacks: 0, totalDur: 0, durCount: 0 };
       var avgDur = st.durCount > 0 ? Math.round(st.totalDur / st.durCount) : 0;
       var durStr = avgDur > 0 ? Math.floor(avgDur / 60) + ':' + String(avgDur % 60).padStart(2, '0') : '—';
       var tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td><span class="tenant-emoji">' + (t.app_emoji || '📱') + '</span><span class="tenant-name">' + t.app_name + '</span></td>' +
-        '<td style="font-weight:700">' + reps + '</td>' +
-        '<td style="font-weight:700;color:#4A90D9">' + st.calls + '</td>' +
-        '<td style="color:var(--green)">' + st.interested + '</td>' +
-        '<td style="color:var(--warn)">' + st.callbacks + '</td>' +
-        '<td>' + durStr + '</td>';
+
+      var tdName = document.createElement('td');
+      var emoji = document.createElement('span');
+      emoji.className = 'tenant-emoji';
+      emoji.textContent = t.app_emoji || '📱';
+      var name = document.createElement('span');
+      name.className = 'tenant-name';
+      name.textContent = t.app_name;
+      tdName.appendChild(emoji);
+      tdName.appendChild(name);
+      tr.appendChild(tdName);
+
+      var tdReps = document.createElement('td');
+      tdReps.style.fontWeight = '700';
+      tdReps.textContent = reps;
+      tr.appendChild(tdReps);
+
+      var tdCalls = document.createElement('td');
+      tdCalls.style.cssText = 'font-weight:700;color:#4A90D9';
+      tdCalls.textContent = st.calls;
+      tr.appendChild(tdCalls);
+
+      var tdInt = document.createElement('td');
+      tdInt.style.color = 'var(--green)';
+      tdInt.textContent = st.interested;
+      tr.appendChild(tdInt);
+
+      var tdCb = document.createElement('td');
+      tdCb.style.color = 'var(--warn)';
+      tdCb.textContent = st.callbacks;
+      tr.appendChild(tdCb);
+
+      var tdDur = document.createElement('td');
+      tdDur.textContent = durStr;
+      tr.appendChild(tdDur);
+
       body.appendChild(tr);
     });
   } catch(e) {

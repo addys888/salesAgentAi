@@ -153,12 +153,15 @@ function initKeyboardShortcuts() {
 
 
 // ── PWA — Dynamic Manifest + Service Worker ──
+// H-6 FIX: Use tenant branding from APP_CONFIG instead of hardcoded names
 function initPWA() {
-  // Inject manifest dynamically
+  // Inject manifest dynamically — uses APP_CONFIG for multi-tenant branding
+  var appName = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.appName) ? APP_CONFIG.appName : 'Sales Dialer';
+  var appSubtitle = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.appSubtitle) ? APP_CONFIG.appSubtitle : 'Smart calling tool for sales teams';
   var manifest = {
-    name: "WhatsApp Sales Dialer",
-    short_name: "Sales Dialer",
-    description: "Smart calling tool for Indian sales teams",
+    name: appName,
+    short_name: appName,
+    description: appSubtitle,
     start_url: window.location.href,
     display: "standalone",
     background_color: "#0a0f0d",
