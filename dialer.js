@@ -574,12 +574,13 @@ function allDone() {
   saveDailyStats(); // F1: Save stats for analytics
 }
 
-window.confirmReset = function() {
+window.confirmReset = async function() {
   var done = contacts.filter(function(c){ return c.status==='done'; }).length;
   var total = contacts.length;
   var msg = 'Reset this session?';
   if(done > 0) msg += '\n\nYou have called ' + done + ' of ' + total + ' leads.\nUnsaved progress will be lost.';
-  if(!confirm(msg)) return;
+  var proceed = await appConfirm(msg, '🗑');
+  if(!proceed) return;
   resetDialer();
 };
 

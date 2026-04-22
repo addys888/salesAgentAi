@@ -289,7 +289,7 @@ window.addEventListener('DOMContentLoaded', async function() {
       currentUser = sessionRes.data.session.user;
       try {
         var profRes = await _sb.from('user_profiles')
-          .select('status, subscription_end')
+          .select('status, subscription_end, tenant_id')
           .eq('id', currentUser.id)
           .single();
         if(!profRes.error && profRes.data) {
@@ -308,6 +308,25 @@ window.addEventListener('DOMContentLoaded', async function() {
               currentUser = null;
               return;
             }
+          }
+          // C-3 FIX: Check tenant-level subscription on auto-login
+          if(p.tenant_id) {
+            try {
+              var tenRes = await _sb.from('tenants').select('subscription_end, is_active').eq('id', p.tenant_id).single();
+              if(!tenRes.error && tenRes.data) {
+                if(!tenRes.data.is_active) {
+                  await _sb.auth.signOut();
+                  currentUser = null;
+                  return;
+                }
+                var tSubCheck = checkTenantSubscription(tenRes.data);
+                if(tSubCheck.blocked) {
+                  await _sb.auth.signOut();
+                  currentUser = null;
+                  return;
+                }
+              }
+            } catch(te) { console.warn('Tenant sub check (non-fatal):', te); }
           }
         }
       } catch(pe) { console.warn('Session status check (non-fatal):', pe); }
@@ -1128,9 +1147,15 @@ function updateAdminStats(total, active, suspended, pending) {
 }
 
 // ════════════════════════════════════════════════════════
-//  MAX REPS
+//  MAX REPS — C-4 FIX: prioritize tenant's max_reps
 // ════════════════════════════════════════════════════════
 async function loadMaxReps() {
+  // Priority 1: use current tenant's max_reps
+  if(currentTenant && currentTenant.max_reps) {
+    MAX_REPS = currentTenant.max_reps;
+    return;
+  }
+  // Priority 2: fall back to app_config table
   if(_sb) {
     try {
       var res = await _sb.from('app_config').select('value').eq('key','max_reps').single();
@@ -1140,6 +1165,7 @@ async function loadMaxReps() {
       }
     } catch(e) {}
   }
+  // Priority 3: localStorage fallback
   try {
     var local = localStorage.getItem('max_reps_override');
     if(local) { MAX_REPS = parseInt(local) || 10; }
@@ -1599,11 +1625,7 @@ window.showSuperAuth = function() {
   setTimeout(function(){ document.getElementById('superAdminPass').focus(); }, 200);
 };
 
-// SHA-256 hash helper (browser native)
-async function sha256(str) {
-  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
-}
+// C-1 FIX: Removed duplicate sha256() — already defined at line 78
 
 window.superAdminLogin = async function() {
   var pass = document.getElementById('superAdminPass').value;
@@ -1845,17 +1867,17 @@ window.loadGlobalStats = async function() {
       repCounts[tid] = (repCounts[tid] || 0) + 1;
     });
 
-    // Get all daily stats
-    var statsRes = await _sb.from('daily_stats').select('user_id, calls_made, interested, callbacks, avg_duration, user_profiles!inner(tenant_id)');
+    // Get all daily stats — C-5 FIX: use correct column names matching saveDailyStats()
+    var statsRes = await _sb.from('daily_stats').select('user_id, called, interested, callback, avg_call_duration, user_profiles!inner(tenant_id)');
     var tenantStats = {};
     (statsRes.data || []).forEach(function(s) {
       var tid = (s.user_profiles && s.user_profiles.tenant_id) || 'none';
       if(!tenantStats[tid]) tenantStats[tid] = { calls: 0, interested: 0, callbacks: 0, totalDur: 0, durCount: 0 };
-      tenantStats[tid].calls += (s.calls_made || 0);
+      tenantStats[tid].calls += (s.called || 0);
       tenantStats[tid].interested += (s.interested || 0);
-      tenantStats[tid].callbacks += (s.callbacks || 0);
-      if(s.avg_duration > 0) {
-        tenantStats[tid].totalDur += s.avg_duration;
+      tenantStats[tid].callbacks += (s.callback || 0);
+      if(s.avg_call_duration > 0) {
+        tenantStats[tid].totalDur += s.avg_call_duration;
         tenantStats[tid].durCount++;
       }
     });
@@ -1882,12 +1904,4 @@ window.loadGlobalStats = async function() {
   }
 };
 
-// Fix showMsg to support success color
-var _origShowMsg = window.showMsg || function(){};
-window.showMsg = function(id, msg, type) {
-  var el = document.getElementById(id);
-  if(el) {
-    el.textContent = msg;
-    el.style.color = type === 'success' ? 'var(--green)' : '';
-  }
-};
+// C-2 FIX: Removed showMsg override — original at L381 handles success type correctly
