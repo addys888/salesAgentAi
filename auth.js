@@ -1386,7 +1386,11 @@ window.loadAnalytics = async function(days) {
   }
 };
 
-function renderAnalyticsCharts(data, days) {
+async function renderAnalyticsCharts(data, days) {
+  // L-3 FIX: Lazy-load Chart.js on first use
+  if(typeof Chart === 'undefined') {
+    try { if(typeof ensureChartJs === 'function') await ensureChartJs(); } catch(e) {}
+  }
   if(typeof Chart === 'undefined') {
     var wrap = document.getElementById('analyticsCharts');
     if(wrap) wrap.textContent = 'Chart.js not loaded. Please check your internet connection.';

@@ -105,6 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_call_sessions_tenant ON call_sessions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_daily_stats_tenant ON daily_stats(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_callbacks_tenant ON callbacks(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_tenants_hostname ON tenants(hostname);
+CREATE INDEX IF NOT EXISTS idx_tenants_team_code ON tenants(team_code); -- L-6 FIX
 
 -- ═══════════════════════════════════════════════════════════
 --  DONE! Verify by running: SELECT * FROM tenants;

@@ -182,8 +182,8 @@
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span id="superAdminBadge" style="display:none;background:rgba(255,171,64,.15);color:var(--warn);border:1px solid rgba(255,171,64,.4);border-radius:99px;padding:4px 12px;font-size:10px;font-weight:700;letter-spacing:.5px">⚡ SUPER ADMIN</span>
-        <button class="icon-btn" onclick="toggleTheme()" id="adminThemeBtn" title="Toggle theme">🌙</button>
-        <button class="btn btn-ghost" onclick="adminLogout()">← Logout</button>
+        <button class="icon-btn" onclick="toggleTheme()" id="adminThemeBtn" title="Toggle theme" aria-label="Toggle dark/light theme">🌙</button>
+        <button class="btn btn-ghost" onclick="adminLogout()" aria-label="Logout from admin panel">← Logout</button>
       </div>
     </div>
 
@@ -289,7 +289,7 @@
     <div class="header">
       <div class="logo" id="appLogoEmoji">📲</div>
       <div class="header-text">
-        <h1 id="appHeaderH1">WhatsApp Sales Dialer</h1>
+        <h1 id="appHeaderH1">Sales Dialer</h1>
         <p id="appHeaderSub">Rapid Call Agent · Built for Sales Teams</p>
       </div>
       <div class="header-right">
@@ -301,8 +301,8 @@
           <div class="avatar-sm" id="userAvatarSm">?</div>
           <span id="userChipName">User</span>
         </div>
-        <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">🌙</button>
-        <button class="icon-btn" onclick="appLogout()" title="Sign Out" style="font-size:14px">
+        <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme" aria-label="Toggle dark/light theme">🌙</button>
+        <button class="icon-btn" onclick="appLogout()" title="Sign Out" aria-label="Sign out" style="font-size:14px">
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
     <polyline points="16 17 21 12 16 7"/>
@@ -353,10 +353,10 @@
       <h2>Session Complete!</h2>
       <p id="doneSummary"></p>
       <div class="done-actions">
-        <button class="btn btn-ai" onclick="openAISummary()">🤖 Generate AI Summary</button>
-        <button class="btn btn-export" onclick="exportPDF()">📄 Export PDF</button>
-        <button class="btn btn-export-excel" onclick="exportExcel()">📊 Export Excel</button>
-        <button class="btn btn-ghost" onclick="resetDialer()">↺ New Session</button>
+        <button class="btn btn-ai" onclick="openAISummary()" aria-label="Generate AI Summary">🤖 Generate AI Summary</button>
+        <button class="btn btn-export" onclick="exportPDF()" aria-label="Export session as PDF">📄 Export PDF</button>
+        <button class="btn btn-export-excel" onclick="exportExcel()" aria-label="Export session as Excel">📊 Export Excel</button>
+        <button class="btn btn-ghost" onclick="resetDialer()" aria-label="Start new session">↺ New Session</button>
       </div>
     </div>
 
@@ -371,9 +371,9 @@
       <div class="panel-header">
         <span>📞</span>
         <h3>Current Contact</h3>
-        <button class="btn btn-ai" onclick="openAISummary()" style="font-size:10px;padding:5px 10px">🤖 AI Summary</button>
-        <button class="btn btn-skip" onclick="skipContact()" style="font-size:10px;padding:5px 10px">⏭ Skip <span class="kbd-hint"><kbd class="kbd">S</kbd></span></button>
-        <button class="btn" onclick="confirmReset()" style="background:rgba(255,82,82,.08);color:var(--danger);border:1px solid rgba(255,82,82,.2);font-size:10px;padding:5px 10px">✕ Reset</button>
+        <button class="btn btn-ai" onclick="openAISummary()" style="font-size:10px;padding:5px 10px" aria-label="Generate AI Summary">🤖 AI Summary</button>
+        <button class="btn btn-skip" onclick="skipContact()" style="font-size:10px;padding:5px 10px" aria-label="Skip current contact">⏭ Skip <span class="kbd-hint"><kbd class="kbd">S</kbd></span></button>
+        <button class="btn" onclick="confirmReset()" style="background:rgba(255,82,82,.08);color:var(--danger);border:1px solid rgba(255,82,82,.2);font-size:10px;padding:5px 10px" aria-label="Reset session">✕ Reset</button>
       </div>
       <div class="progress-wrap">
         <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
@@ -787,12 +787,38 @@
 
 <!-- ══════════════════════════════════════════
      EXTERNAL DEPENDENCIES (CDN)
+     L-8 FIX: Added onerror fallback logging for CDN failures
 ══════════════════════════════════════════ -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" onerror="console.error('CRITICAL: Supabase CDN failed — app cannot connect to database');document.getElementById('configBanner').style.display='block';document.getElementById('configBanner').innerHTML='⚠️ <strong>CDN ERROR:</strong> Could not load Supabase library. Check your internet connection.'"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js" onerror="console.warn('XLSX library failed to load — Excel export will be unavailable')"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" onerror="console.warn('EmailJS failed to load — email reports will use mailto: fallback')"></script>
+<!-- L-3/L-4 FIX: Chart.js and jsPDF are now lazy-loaded by JS when actually needed -->
+<script>
+  // L-3: Lazy-load Chart.js only when admin opens analytics tab
+  window._chartJsLoaded = false;
+  window.ensureChartJs = function() {
+    if(window._chartJsLoaded || typeof Chart !== 'undefined') { window._chartJsLoaded = true; return Promise.resolve(); }
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4';
+      s.onload = function() { window._chartJsLoaded = true; resolve(); };
+      s.onerror = function() { console.warn('Chart.js CDN failed'); reject(); };
+      document.head.appendChild(s);
+    });
+  };
+  // L-4: Lazy-load jsPDF only when user clicks Export PDF
+  window._jspdfLoaded = false;
+  window.ensureJsPDF = function() {
+    if(window._jspdfLoaded || typeof jspdf !== 'undefined') { window._jspdfLoaded = true; return Promise.resolve(); }
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js';
+      s.onload = function() { window._jspdfLoaded = true; resolve(); };
+      s.onerror = function() { console.warn('jsPDF CDN failed'); reject(); };
+      document.head.appendChild(s);
+    });
+  };
+</script>
 
 <!-- ══════════════════════════════════════════
      APPLICATION JS (load order matters)

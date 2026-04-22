@@ -1105,7 +1105,11 @@ window.sendEmailReport = function() {
 // ════════════════════════════════════════════════════════
 //  F5: EXPORT REPORT (PDF / Excel)
 // ════════════════════════════════════════════════════════
-window.exportPDF = function() {
+window.exportPDF = async function() {
+  // L-4 FIX: Lazy-load jsPDF on first use
+  if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+    try { if(typeof ensureJsPDF === 'function') await ensureJsPDF(); } catch(e) {}
+  }
   if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
     appAlert('PDF library not loaded. Please check your internet connection.', '📄');
     return;
