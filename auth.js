@@ -443,7 +443,7 @@ window.userRegister = async function() {
   var teamCode = (document.getElementById('regTeamCode').value || '').trim().toUpperCase();
   if(!name)  return showMsg('registerMsg','❌ Please enter your full name');
   if(!email) return showMsg('registerMsg','❌ Please enter your email');
-  if(!phone || !/^[6-9]\d{9}$/.test(phone)) return showMsg('registerMsg','❌ Enter a valid 10-digit Indian mobile number');
+  if(!phone || phone.length < 7 || phone.length > 15 || !/^\d+$/.test(phone.replace(/^\+/,''))) return showMsg('registerMsg','❌ Enter a valid phone number (7-15 digits)');
   if(pass.length < 8) return showMsg('registerMsg','❌ Password must be at least 8 characters');
   if(!teamCode) return showMsg('registerMsg','❌ Please enter your Team Code (ask your manager)');
   var btn = document.getElementById('registerBtn');
@@ -732,17 +732,17 @@ window.otpMove = function(el, idx) {
 // ════════════════════════════════════════════════════════
 //  ENTER APP
 // ════════════════════════════════════════════════════════
-function enterApp() {
+async function enterApp() {
   var meta = (currentUser && currentUser.user_metadata) || {};
   var name = meta.full_name || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || 'User';
   document.getElementById('userChipName').textContent = name.split(' ')[0];
   document.getElementById('userAvatarSm').textContent = name[0].toUpperCase();
   document.getElementById('userAuthScreen').classList.remove('visible');
   document.getElementById('landingScreen').style.display = 'none';
+  // M-6 FIX: Load tenant branding BEFORE showing app container to prevent flash
+  await loadUserTenant();
   document.getElementById('appContainer').style.display = 'block';
   checkSubscription();
-  // Load correct tenant branding for this user
-  loadUserTenant();
   setTimeout(function(){ checkForActiveSession(); }, 800);
   setTimeout(function(){ if(typeof checkTodayCallbacks === 'function') checkTodayCallbacks(); }, 1200);
 }
@@ -884,8 +884,9 @@ window.adminLogin = async function() {
   try {
     var hash = await sha256(p);
     // Multi-tenant: match against current tenant's hashes
-    var validAdmin = (u === ADMIN_USER && hash === ADMIN_HASH);
-    var validSuper = (u === ADMIN_USER && hash === SUPER_HASH);
+    // M-7 FIX: Accept any username — only validate password hash
+    var validAdmin = (hash === ADMIN_HASH);
+    var validSuper = (hash === SUPER_HASH);
 
     // If no tenant loaded yet, try to find tenant by admin_hash match
     if(!validAdmin && !validSuper && _sb) {
@@ -1191,14 +1192,27 @@ window.saveMaxReps = async function() {
     }
   } catch(ce) {}
 
+  // M-1 FIX: Save to tenant's max_reps column if tenant is loaded
   var savedToCloud = false;
-  try {
-    var res = await _sb.from('app_config').upsert(
-      { key: 'max_reps', value: String(val) },
-      { onConflict: 'key' }
-    );
-    if(!res.error) savedToCloud = true;
-  } catch(e) {}
+  if(currentTenant && _sb) {
+    try {
+      var res = await _sb.from('tenants').update({ max_reps: val }).eq('id', currentTenant.id);
+      if(!res.error) {
+        savedToCloud = true;
+        currentTenant.max_reps = val; // Update local cache
+      }
+    } catch(e) {}
+  }
+  // Fallback: save to app_config for non-tenant mode
+  if(!savedToCloud && _sb) {
+    try {
+      var res2 = await _sb.from('app_config').upsert(
+        { key: 'max_reps', value: String(val) },
+        { onConflict: 'key' }
+      );
+      if(!res2.error) savedToCloud = true;
+    } catch(e) {}
+  }
 
   try { localStorage.setItem('max_reps_override', String(val)); } catch(le) {}
   MAX_REPS = val;
@@ -1342,23 +1356,21 @@ window.loadAnalytics = async function(days) {
   try {
     var cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    var res = await _sb.from('daily_stats')
-      .select('*, user_profiles!inner(full_name, email)')
-      .gte('stat_date', cutoff.toISOString().split('T')[0])
+    var cutoffStr = cutoff.toISOString().split('T')[0];
+
+    // M-2 FIX: Build a single query with conditional tenant filter (no double-fire)
+    var query = _sb.from('daily_stats')
+      .select('*, user_profiles!inner(full_name, email, tenant_id)')
+      .gte('stat_date', cutoffStr)
       .order('stat_date', {ascending: true});
-    // Multi-tenant: filter by tenant (applied if join succeeds)
-    if(currentTenant) {
-      res = await _sb.from('daily_stats')
-        .select('*, user_profiles!inner(full_name, email, tenant_id)')
-        .eq('tenant_id', currentTenant.id)
-        .gte('stat_date', cutoff.toISOString().split('T')[0])
-        .order('stat_date', {ascending: true});
-    }
+    if(currentTenant) query = query.eq('tenant_id', currentTenant.id);
+    var res = await query;
+
     if(res.error) {
-      // Fallback if join fails
+      // Fallback if join fails (tenant_id column may not exist on daily_stats)
       var fallbackQuery = _sb.from('daily_stats')
         .select('*')
-        .gte('stat_date', cutoff.toISOString().split('T')[0])
+        .gte('stat_date', cutoffStr)
         .order('stat_date', {ascending: true});
       if(currentTenant) fallbackQuery = fallbackQuery.eq('tenant_id', currentTenant.id);
       var res2 = await fallbackQuery;
@@ -1666,7 +1678,7 @@ window.superAdminLogin = async function() {
 
 window.superAdminLogout = function() {
   document.getElementById('superPanel').style.display = 'none';
-  document.getElementById('landingScreen').style.display = '';
+  document.getElementById('landingScreen').style.display = 'flex'; // M-9 FIX: consistent with other logouts
 };
 
 window.switchSuperTab = function(tab) {

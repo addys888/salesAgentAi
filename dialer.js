@@ -1151,7 +1151,7 @@ window.exportPDF = function() {
     if(y > 275) { doc.addPage(); y = 20; }
     doc.setTextColor(c.status === 'done' ? 0 : 150);
     doc.text(String(i+1), 14, y);
-    doc.text('+91 ' + c.number, 24, y);
+    doc.text(c.displayNum || ('+91 ' + c.number), 24, y);
     doc.text((c.name || '-').substring(0, 18), 65, y);
     var ocLabel = {interested:'Interested',callback:'Callback',noanswer:'No Answer',notinterested:'Not Int.',skipped:'Skipped'};
     doc.text(ocLabel[c.outcome] || '-', 105, y);
@@ -1177,7 +1177,7 @@ window.exportExcel = function() {
   var data = [['#', 'Number', 'Name', 'Outcome', 'Duration', 'Duration (sec)', 'Call Note', 'Status']];
   contacts.forEach(function(c, i) {
     var durFormatted = (c.duration && c.duration > 0) ? Math.floor(c.duration/60) + ':' + String(c.duration%60).padStart(2,'0') : '-';
-    data.push([i+1, '+91 ' + c.number, c.name || '', c.outcome || '', durFormatted, c.duration || 0, c.callNote || '', c.status]);
+    data.push([i+1, c.displayNum || ('+91 ' + c.number), c.name || '', c.outcome || '', durFormatted, c.duration || 0, c.callNote || '', c.status]);
   });
 
   var ws = XLSX.utils.aoa_to_sheet(data);
@@ -1256,6 +1256,7 @@ window.saveCallback = async function() {
         user_id: currentUser.id,
         contact_name: _cbPendingContact.name || '',
         contact_number: _cbPendingContact.number || '',
+        country_code: _cbPendingContact.countryCode || '91',
         callback_date: cbDate,
         callback_time: cbTime || null,
         note: _cbPendingNote,
@@ -1342,7 +1343,7 @@ function showCallbackBanner(callbacks) {
     // Action buttons: WhatsApp, Phone, Note, Done
     var actionsDiv = document.createElement('div');
     actionsDiv.className = 'cb-actions';
-    var waNum = '91' + (cb.contact_number || '').replace(/^91/,'');
+    var waNum = (cb.country_code || '91') + (cb.contact_number || '').replace(/^(91|\+91)/,'');
     var waBtn = document.createElement('a');
     waBtn.className = 'cb-call-btn wa';
     waBtn.href = 'https://wa.me/' + waNum;
@@ -1353,7 +1354,7 @@ function showCallbackBanner(callbacks) {
     actionsDiv.appendChild(waBtn);
     var phoneBtn = document.createElement('a');
     phoneBtn.className = 'cb-call-btn phone';
-    phoneBtn.href = 'tel:+91' + (cb.contact_number || '');
+    phoneBtn.href = 'tel:+' + (cb.country_code || '91') + (cb.contact_number || '');
     phoneBtn.textContent = '📞';
     phoneBtn.title = 'Phone Call';
     phoneBtn.onclick = function(e) { e.stopPropagation(); };
