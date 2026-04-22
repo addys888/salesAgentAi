@@ -1703,24 +1703,26 @@ window.loadAllTenants = async function() {
     if(res.error) throw res.error;
     var tenants = res.data || [];
 
-    // Count reps per tenant
+    // Count reps per tenant — only count users with a valid tenant assignment
     var repRes = await _sb.from('user_profiles').select('tenant_id');
     var repCounts = {};
     var totalReps = 0;
+    var tenantIds = new Set(tenants.map(function(t){ return t.id; }));
     (repRes.data || []).forEach(function(u) {
       var tid = u.tenant_id || 'none';
       repCounts[tid] = (repCounts[tid] || 0) + 1;
-      totalReps++;
+      // Only count reps belonging to known tenants for the header stat
+      if(u.tenant_id && tenantIds.has(u.tenant_id)) totalReps++;
     });
 
-    // Count daily calls
+    // Count daily calls (use correct column name 'called' not 'calls_made')
     var today = new Date().toISOString().split('T')[0];
-    var statsRes = await _sb.from('daily_stats').select('calls_made, stat_date');
+    var statsRes = await _sb.from('daily_stats').select('called, stat_date');
     var totalCalls = 0;
     var activeToday = 0;
     (statsRes.data || []).forEach(function(s) {
-      totalCalls += (s.calls_made || 0);
-      if(s.stat_date === today && s.calls_made > 0) activeToday++;
+      totalCalls += (s.called || 0);
+      if(s.stat_date === today && s.called > 0) activeToday++;
     });
 
     // Update stats bar

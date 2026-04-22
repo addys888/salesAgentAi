@@ -673,13 +673,20 @@ async function completeSession() {
 async function checkForActiveSession() {
   if(!currentUser || !_sb) return;
   try {
-    var cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString();
-    _sb.from('call_sessions')
-      .delete()
-      .eq('user_id', currentUser.id)
-      .in('status', ['completed','discarded'])
-      .lt('updated_at', cutoff)
-      .then(function(){}).catch(function(){});
+    // L-1 FIX: Only run session cleanup once per day (not every login)
+    var lastCleanup = null;
+    try { lastCleanup = localStorage.getItem('_lastSessionCleanup'); } catch(e) {}
+    var now = new Date().toISOString().split('T')[0];
+    if(lastCleanup !== now) {
+      var cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+      _sb.from('call_sessions')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .in('status', ['completed','discarded'])
+        .lt('updated_at', cutoff)
+        .then(function(){ try { localStorage.setItem('_lastSessionCleanup', now); } catch(e) {} })
+        .catch(function(){});
+    }
 
     var res = await _sb.from('call_sessions')
       .select('*')
