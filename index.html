@@ -208,6 +208,7 @@
       <button class="admin-tab active" id="adminTab-users" onclick="switchAdminTab('users')">👥 Users</button>
       <button class="admin-tab" id="adminTab-analytics" onclick="switchAdminTab('analytics')">📊 Analytics</button>
       <button class="admin-tab" id="adminTab-leaderboard" onclick="switchAdminTab('leaderboard')">🏆 Leaderboard</button>
+      <button class="admin-tab" id="adminTab-leads" onclick="switchAdminTab('leads')">📥 Leads</button>
     </div>
 
     <!-- TAB: Users (existing content) -->
@@ -274,6 +275,56 @@
       </div>
     </div>
 
+    <!-- TAB: Leads (Auto-Capture) -->
+    <div id="adminPanel-leads" style="display:none">
+      <div class="admin-panel-card">
+        <div class="acard-header">
+          <h3>📥 Lead Auto-Capture</h3>
+          <button class="btn btn-ai" onclick="loadAdminLeads()" style="font-size:10px;padding:5px 12px">🔄 Refresh</button>
+        </div>
+
+        <!-- Webhook Setup Card -->
+        <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:16px;margin-bottom:16px">
+          <h4 style="margin:0 0 12px;font-size:13px;color:var(--green)">🔗 Webhook Setup</h4>
+          <div style="margin-bottom:10px">
+            <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Your Webhook URL</label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <input type="text" id="webhookUrlDisplay" readonly style="flex:1;font-size:11px;font-family:monospace;padding:8px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text)">
+              <button class="btn" onclick="copyWebhookUrl()" style="font-size:10px;padding:6px 12px;white-space:nowrap" aria-label="Copy webhook URL">📋 Copy</button>
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Webhook Secret</label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <input type="password" id="webhookSecretDisplay" readonly style="flex:1;font-size:11px;font-family:monospace;padding:8px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text)">
+              <button class="btn" onclick="toggleWebhookSecret()" style="font-size:10px;padding:6px 12px" aria-label="Toggle secret visibility">👁</button>
+              <button class="btn" onclick="copyWebhookSecret()" style="font-size:10px;padding:6px 12px" aria-label="Copy webhook secret">📋</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn btn-ai" onclick="showSnippetModal()" style="font-size:10px;padding:6px 14px">🌐 Website Snippet</button>
+            <button class="btn" onclick="showZapierGuide()" style="font-size:10px;padding:6px 14px">⚡ Zapier / Pabbly Guide</button>
+          </div>
+        </div>
+
+        <!-- Leads Table -->
+        <div id="leadsTableWrap">
+          <div class="admin-loading" id="leadsLoading" style="display:none">
+            <div class="ai-spinner" style="border-top-color:var(--green)"></div> Loading leads...
+          </div>
+          <div class="admin-empty" id="leadsEmpty">No leads captured yet. Connect a webhook source to start receiving leads automatically.</div>
+          <div style="overflow-x:auto">
+            <table class="users-table" id="leadsTable" style="display:none">
+              <thead><tr>
+                <th>#</th><th>Name</th><th>Phone</th><th>Source</th><th>Interest</th><th>Status</th><th>Assigned To</th><th>Received</th>
+              </tr></thead>
+              <tbody id="leadsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="note" style="color:var(--muted)">
       🔐 Admin credentials are secured via hashed authentication. Contact your system administrator for access.<br>
       Supabase stores all user data securely server-side. Users cannot bypass authentication.
@@ -319,6 +370,12 @@
       <button class="btn-upload" onclick="document.getElementById('fileInput').click()">📁 Choose File</button>
       <div class="supported">Supports .xlsx · .xls · .csv</div>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      <div id="leadsButtonWrap" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border2)">
+        <button class="btn btn-ai" onclick="loadFromLeads()" style="padding:10px 24px;font-size:13px;gap:8px" aria-label="Load leads from auto-capture">
+          📥 Load from Leads <span id="newLeadsBadge" style="background:var(--green);color:#000;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">0</span>
+        </button>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px">Auto-captured leads from your webhook sources</div>
+      </div>
     </div>
 
     <div class="config-bar" id="configBar">

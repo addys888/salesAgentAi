@@ -109,6 +109,111 @@ window.filterQueue = function() {
 };
 
 // ════════════════════════════════════════════════════════
+//  LEAD AUTO-CAPTURE — Load leads from webhook sources
+// ════════════════════════════════════════════════════════
+
+// Check for new leads and show badge (called on app load)
+window.checkNewLeads = async function() {
+  try {
+    var sb = typeof getSB === 'function' ? getSB() : _sb;
+    if(!sb || !currentUser) return;
+    var query = sb.from('leads').select('id', { count: 'exact', head: true })
+      .eq('assigned_to', currentUser.id).eq('status', 'new');
+    var res = await query;
+    var count = res.count || 0;
+    var badge = document.getElementById('newLeadsBadge');
+    var wrap = document.getElementById('leadsButtonWrap');
+    if(count > 0) {
+      if(badge) badge.textContent = count;
+      if(wrap) wrap.style.display = 'block';
+    } else {
+      if(wrap) wrap.style.display = 'none';
+    }
+  } catch(e) { /* non-fatal */ }
+};
+
+// Load leads from DB into dialer (same format as Excel parser)
+window.loadFromLeads = async function() {
+  try {
+    var sb = typeof getSB === 'function' ? getSB() : _sb;
+    if(!sb || !currentUser) { appAlert('Please login first.', '⚠️'); return; }
+    showToast('📥 Loading leads...');
+    var res = await sb.from('leads').select('*')
+      .eq('assigned_to', currentUser.id).eq('status', 'new')
+      .order('created_at', { ascending: true });
+    if(res.error) throw res.error;
+    if(!res.data || !res.data.length) {
+      appAlert('No new leads assigned to you.\n\nAsk your admin to connect a webhook source (website form, Zapier, etc.) to start receiving leads automatically.', '📭');
+      return;
+    }
+    // Convert to same contacts[] format as Excel parser
+    contacts = [];
+    var skipped = 0;
+    res.data.forEach(function(lead) {
+      var cleaned = cleanNumber(lead.phone || '');
+      if(cleaned) {
+        contacts.push({
+          number: cleaned.num,
+          countryCode: cleaned.code || '91',
+          displayNum: cleaned.display,
+          name: lead.full_name || '',
+          note: (lead.interest || '') + (lead.source ? ' [' + lead.source + ']' : ''),
+          status: 'pending',
+          outcome: '',
+          callNote: '',
+          duration: 0,
+          isIntl: cleaned.isIntl || false,
+          _leadId: lead.id  // Track which lead record this came from
+        });
+      } else { skipped++; }
+    });
+    if(!contacts.length) {
+      appAlert('All ' + res.data.length + ' leads had invalid phone numbers.', '📵');
+      return;
+    }
+    contacts = deduplicateContacts(contacts);
+    if(skipped > 0) showToast('⚠️ ' + skipped + ' invalid number' + (skipped > 1 ? 's' : '') + ' skipped');
+    showToast('✅ ' + contacts.length + ' leads loaded!');
+    // Mark leads as "called" (in-progress) in DB so they don't show again
+    var ids = res.data.map(function(l) { return l.id; });
+    sb.from('leads').update({ status: 'called' }).in('id', ids).then(function(){}).catch(function(){});
+    // Same flow as Excel from here — show dialer
+    if(isDNDHours()) showDNDBanner(); else removeDNDBanner();
+    document.getElementById('configBar').style.display = 'none';
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('statsBar').style.display = 'grid';
+    document.getElementById('dialerPanel').style.display = 'block';
+    currentIndex = 0; calledCount = 0; skippedCount = 0;
+    buildTable(); updateStats(); showContact(0);
+  } catch(e) {
+    appAlert('Failed to load leads: ' + (e.message || e), '❌');
+  }
+};
+
+// Sync call outcome back to leads table (called after tagging)
+function syncLeadOutcome(contact) {
+  if(!contact || !contact._leadId) return; // Not a webhook lead
+  try {
+    var sb = typeof getSB === 'function' ? getSB() : _sb;
+    if(!sb) return;
+    var statusMap = {
+      'interested': 'interested',
+      'callback': 'callback',
+      'noanswer': 'not_interested',
+      'notinterested': 'not_interested',
+      '': 'called'
+    };
+    sb.from('leads').update({
+      status: statusMap[contact.outcome] || 'called',
+      call_note: contact.callNote || null,
+      called_at: new Date().toISOString()
+    }).eq('id', contact._leadId).then(function(){}).catch(function(e){
+      console.warn('[leads] Sync error:', e.message);
+    });
+  } catch(e) { /* non-fatal */ }
+}
+
+// ════════════════════════════════════════════════════════
 //  FILE UPLOAD & PARSING
 // ════════════════════════════════════════════════════════
 function handleFile(file) {
@@ -483,6 +588,8 @@ window.nextContact = function() {
   var savedNote = noteInp ? noteInp.value.trim() : '';
   contacts[currentIndex].callNote = savedNote;
   contacts[currentIndex].status = 'done'; contacts[currentIndex].outcome = currentOutcome;
+  // Sync outcome back to leads table (if this was a webhook lead)
+  syncLeadOutcome(contacts[currentIndex]);
   updateRowStatus(currentIndex,'done');
   var cell = document.getElementById('oc-cell-'+currentIndex);
   if(cell){ var L={interested:'\uD83D\uDFE2 Interested',callback:'\uD83D\uDD14 Callback',noanswer:'\uD83D\uDCF5 No Answer',notinterested:'\uD83D\uDD34 Not Interested','':'\u2014'}; cell.textContent=L[currentOutcome]||'\u2014'; }
