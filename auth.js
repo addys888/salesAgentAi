@@ -1913,13 +1913,11 @@ window.addNewTenant = async function () {
   var teamCode = document.getElementById('ntTeamCode').value.trim().toUpperCase();
   var maxReps = parseInt(document.getElementById('ntMaxReps').value) || 15;
   var adminPass = document.getElementById('ntAdminPass').value.trim();
-  var superPass = document.getElementById('ntSuperPass').value.trim();
   var subEnd = document.getElementById('ntSubEnd').value || null;
 
   if (!name) return showMsg('addTenantMsg', '❌ Company name is required');
   if (!teamCode) return showMsg('addTenantMsg', '❌ Team code is required');
   if (!adminPass) return showMsg('addTenantMsg', '❌ Admin password is required');
-  if (!superPass) return showMsg('addTenantMsg', '❌ Super admin password is required');
   if (adminPass.length < 8) return showMsg('addTenantMsg', '❌ Admin password must be at least 8 characters');
 
   var btn = document.getElementById('addTenantBtn');
@@ -1929,9 +1927,13 @@ window.addNewTenant = async function () {
     // Generate slug from name
     var slug = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 30);
 
-    // Hash passwords using browser crypto
+    // Hash admin password using browser crypto
     var adminHash = await sha256(adminPass);
-    var superHash = await sha256(superPass);
+    // Per-tenant super_hash is no longer set via the form. The platform Super Admin
+    // (CELERAPPS_SUPER_HASH) is global and unique. We generate a random unguessable
+    // value here purely to satisfy the NOT NULL DB constraint; nobody knows or uses it.
+    var randomBytes = crypto.getRandomValues(new Uint8Array(32));
+    var superHash = Array.from(randomBytes).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
 
     var res = await _sb.from('tenants').insert({
       slug: slug,
@@ -1962,7 +1964,7 @@ window.addNewTenant = async function () {
 
     showMsg('addTenantMsg', '✅ Tenant "' + name + '" created! Team Code: ' + teamCode, 'success');
     // Clear form
-    ['ntName', 'ntSubtitle', 'ntEmoji', 'ntTagline', 'ntTeamCode', 'ntAdminPass', 'ntSuperPass', 'ntSubEnd'].forEach(function (id) {
+    ['ntName', 'ntSubtitle', 'ntEmoji', 'ntTagline', 'ntTeamCode', 'ntAdminPass', 'ntSubEnd'].forEach(function (id) {
       document.getElementById(id).value = '';
     });
     document.getElementById('ntMaxReps').value = '15';
