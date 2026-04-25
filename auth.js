@@ -1786,7 +1786,7 @@ window.superAdminVerifyOtp = async function () {
     return;
   }
   var token = (document.getElementById('superOtpInput').value || '').trim();
-  if (!/^\d{6}$/.test(token)) return showMsg('superOtpMsg', '❌ Enter the 6-digit code from your email');
+  if (!/^\d{6,10}$/.test(token)) return showMsg('superOtpMsg', '❌ Enter the numeric code from your email');
   try {
     // Try 'email' type first; fall back to 'magiclink' (signInWithOtp uses
     // the magic-link flow under the hood on some Supabase setups).

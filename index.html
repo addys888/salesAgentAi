@@ -734,13 +734,13 @@
     <div class="auth-logo-wrap super">
       <span class="icon">📧</span>
       <h2>Verify it's you</h2>
-      <p>We sent a 6-digit code to <strong id="superOtpEmail">your email</strong></p>
+      <p>We sent a code to <strong id="superOtpEmail">your email</strong></p>
     </div>
     <div class="field-group">
       <label>🔢 One-Time Code</label>
-      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10"
              class="field-input super-focus" id="superOtpInput"
-             placeholder="123456" autocomplete="one-time-code"
+             placeholder="6-10 digit code" autocomplete="one-time-code"
              style="letter-spacing:6px;text-align:center;font-size:18px;font-weight:600"
              onkeydown="if(event.key==='Enter')superAdminVerifyOtp()">
     </div>
