@@ -1790,6 +1790,7 @@ window.superAdminVerifyOtp = async function () {
   try {
     var res = await _sb.auth.verifyOtp({ email: CELERAPPS_SUPER_EMAIL, token: token, type: 'email' });
     if (res.error) {
+      console.warn('verifyOtp error:', res.error);
       _superOtpAttempts++;
       var remaining = SUPER_OTP_MAX_ATTEMPTS - _superOtpAttempts;
       if (_superOtpAttempts >= SUPER_OTP_MAX_ATTEMPTS) {
@@ -1797,9 +1798,12 @@ window.superAdminVerifyOtp = async function () {
         _superOtpAttempts = 0;
         showMsg('superOtpMsg', '🔒 Too many failed attempts. Locked for 60 seconds.');
       } else {
-        showMsg('superOtpMsg', '❌ Invalid or expired code. ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining.');
+        var detail = res.error.message ? ' (' + res.error.message + ')' : '';
+        showMsg('superOtpMsg', '❌ Invalid or expired code' + detail + '. ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining.');
       }
-      document.getElementById('superOtpInput').value = '';
+      // Keep value for editing — select it so the user can quickly retype/correct
+      var inp = document.getElementById('superOtpInput');
+      if (inp) { try { inp.select(); } catch (e) { } }
       return;
     }
     // Verified — sign out the temp Supabase session immediately so it doesn't
