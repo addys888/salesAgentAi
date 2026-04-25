@@ -106,6 +106,19 @@ function initSupabase() {
     if (lib) {
       _sb = lib.createClient(SUPABASE_URL, SUPABASE_ANON);
       console.log('Supabase ready:', !!_sb);
+      // Catch password-recovery URLs regardless of flow type (implicit hash
+      // or PKCE ?code=). Without this listener, the PKCE code exchange
+      // silently logs the user in instead of showing the reset overlay.
+      try {
+        _sb.auth.onAuthStateChange(function (event) {
+          if (event === 'PASSWORD_RECOVERY') {
+            window._inPasswordRecovery = true;
+            var overlay = document.getElementById('resetPwOverlay');
+            if (overlay) overlay.style.display = 'flex';
+            try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+          }
+        });
+      } catch (e) { console.warn('onAuthStateChange wiring failed:', e); }
     } else {
       console.error('Supabase lib not found.');
       document.getElementById('configBanner').style.display = 'block';
@@ -282,6 +295,15 @@ window.addEventListener('DOMContentLoaded', async function () {
   }
 
   await loadMaxReps();
+
+  // If a recovery is in progress (PASSWORD_RECOVERY fired or URL still
+  // carries a recovery code), don't auto-enter the app — let the reset
+  // overlay handle it.
+  if (window._inPasswordRecovery || /[?&]code=/.test(window.location.search)) {
+    var ovl = document.getElementById('resetPwOverlay');
+    if (ovl) ovl.style.display = 'flex';
+    return;
+  }
 
   try {
     var sessionRes = await _sb.auth.getSession();
