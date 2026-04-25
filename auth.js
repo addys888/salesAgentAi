@@ -1801,6 +1801,28 @@ window.loadAllTenants = async function () {
       tdCode.appendChild(codeInput);
       tr.appendChild(tdCode);
 
+      // Admin Username cell (editable)
+      var tdUser = document.createElement('td');
+      var userInput = document.createElement('input');
+      userInput.type = 'text';
+      userInput.value = t.admin_username || 'admin';
+      userInput.style.cssText = 'background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);color:#4A90D9;padding:3px 8px;border-radius:4px;font-size:11px;width:110px;font-family:monospace';
+      userInput.title = 'Edit admin username (2-32 chars: letters, numbers, . _ -)';
+      userInput.dataset.tenantId = t.id;
+      userInput.dataset.prevValue = userInput.value;
+      userInput.addEventListener('change', function (e) {
+        var v = (e.target.value || '').trim();
+        if (!/^[a-zA-Z0-9._-]{2,32}$/.test(v)) {
+          appAlert('Admin username must be 2-32 chars (letters, numbers, . _ -)', '⚠️');
+          e.target.value = e.target.dataset.prevValue;
+          return;
+        }
+        e.target.dataset.prevValue = v;
+        updateTenantField(e.target.dataset.tenantId, 'admin_username', v);
+      });
+      tdUser.appendChild(userInput);
+      tr.appendChild(tdUser);
+
       // Reps count cell
       var tdReps = document.createElement('td');
       tdReps.style.fontWeight = '700';
@@ -1900,7 +1922,7 @@ window.updateTenantField = async function (tenantId, field, value) {
     update[field] = value;
     var res = await _sb.from('tenants').update(update).eq('id', tenantId);
     if (res.error) throw res.error;
-    var labels = { team_code: 'Team Code', max_reps: 'Max Reps', subscription_end: 'Subscription' };
+    var labels = { team_code: 'Team Code', max_reps: 'Max Reps', subscription_end: 'Subscription', admin_username: 'Admin Username' };
     showToast('✅ ' + (labels[field] || field) + ' updated');
   } catch (e) {
     if (e.message && e.message.includes('unique')) {
