@@ -922,8 +922,11 @@ window.adminLogin = async function () {
           MAX_REPS = t.max_reps || 10;
           validAdmin = (hash === t.admin_hash);
           validSuper = (hash === t.super_hash);
-          // Apply tenant branding
+          // Apply tenant branding (must include dialerTitle & adminDashTitle —
+          // these drive the dialer header and "<Tenant> Console" admin header)
           APP_CONFIG.appName = t.app_name || APP_CONFIG.appName;
+          APP_CONFIG.dialerTitle = t.app_name || APP_CONFIG.dialerTitle;
+          APP_CONFIG.adminDashTitle = (t.app_name || APP_CONFIG.appName) + ' Console';
           APP_CONFIG.appSubtitle = t.app_subtitle || APP_CONFIG.appSubtitle;
           APP_CONFIG.appEmoji = t.app_emoji || APP_CONFIG.appEmoji;
           APP_CONFIG.landingTitle = t.landing_title || APP_CONFIG.landingTitle;
