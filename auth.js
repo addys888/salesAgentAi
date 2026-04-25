@@ -294,7 +294,7 @@ window.addEventListener('DOMContentLoaded', async function () {
           .single();
         if (!profRes.error && profRes.data) {
           var p = profRes.data;
-          if (p.status === 'suspended') {
+          if (p.status === 'pending' || p.status === 'rejected' || p.status === 'suspended') {
             await _sb.auth.signOut();
             currentUser = null;
             return;
@@ -521,77 +521,58 @@ window.userRegister = async function () {
       return;
     }
 
+    // New flow: reps register as 'pending'. Manager must approve before login.
+    // If a previously-rejected row exists for this email, we re-flip it to 'pending'
+    // (handled by the upsert below, since user_profiles.id is keyed off auth.users.id).
     var res = await sb.auth.signUp({
       email: email,
       password: pass,
-      options: { data: { full_name: name, phone_number: phone, status: 'active' } }
+      options: { data: { full_name: name, phone_number: phone, status: 'pending' } }
     });
 
     if (res.error && res.error.message && res.error.message.toLowerCase().includes('already')) {
+      // Existing user — could be a rejected/pending one trying to re-register.
+      // Try to log in to get their id, then re-set their profile to 'pending'.
+      var reLogin = await sb.auth.signInWithPassword({ email: email, password: pass });
+      if (!reLogin.error && reLogin.data && reLogin.data.user) {
+        var reuid = reLogin.data.user.id;
+        try {
+          await sb.from('user_profiles').upsert({
+            id: reuid, full_name: name, email: email,
+            phone_number: phone, status: 'pending',
+            tenant_id: currentTenant ? currentTenant.id : null
+          }, { onConflict: 'id' });
+        } catch (pe) { console.warn('profile upsert (re-register):', pe); }
+        await sb.auth.signOut();
+        currentUser = null;
+        showPendingApprovalScreen();
+        return;
+      }
       showMsg('registerMsg', '❌ Email already registered. Please login instead.');
       btn.disabled = false; btn.textContent = 'Create Account →';
       return;
     }
 
-    if (res.error && res.error.status === 500) {
-      var tryLogin = await sb.auth.signInWithPassword({ email: email, password: pass });
-      if (!tryLogin.error) {
-        currentUser = tryLogin.data.user;
-        try {
-          await sb.from('user_profiles').upsert({
-            id: currentUser.id, full_name: name, email: email,
-            phone_number: phone, status: 'active',
-            tenant_id: currentTenant ? currentTenant.id : null
-          }, { onConflict: 'id' });
-        } catch (pe) { console.warn('profile upsert:', pe); }
-        showMsg('registerMsg', '✅ Account created! Entering app...', 'success');
-        setTimeout(function () { enterApp(); }, 800);
-        return;
-      }
-      throw res.error;
-    }
-
     if (res.error) throw res.error;
 
     var user = res.data && res.data.user;
-    var session = res.data && res.data.session;
 
-    if (session) {
-      currentUser = user;
+    // Persist profile row as pending (works whether or not a session was returned)
+    if (user) {
       try {
         await sb.from('user_profiles').upsert({
           id: user.id, full_name: name, email: email,
-          phone_number: phone, status: 'active',
+          phone_number: phone, status: 'pending',
           tenant_id: currentTenant ? currentTenant.id : null
         }, { onConflict: 'id' });
       } catch (pe) { console.warn('profile upsert:', pe); }
-      showMsg('registerMsg', '✅ Account created! Entering app...', 'success');
-      setTimeout(function () { enterApp(); }, 800);
-    } else {
-      // Email confirmation might be on — try auto-login first
-      if (user) {
-        try {
-          await sb.from('user_profiles').upsert({
-            id: user.id, full_name: name, email: email,
-            phone_number: phone, status: 'active',
-            tenant_id: currentTenant ? currentTenant.id : null
-          }, { onConflict: 'id' });
-        } catch (pe) { }
-      }
-      // Attempt immediate login (works when email confirmation is OFF)
-      try {
-        var autoLogin = await sb.auth.signInWithPassword({ email: email, password: pass });
-        if (!autoLogin.error && autoLogin.data && autoLogin.data.user) {
-          currentUser = autoLogin.data.user;
-          showMsg('registerMsg', '✅ Account created! Entering app...', 'success');
-          setTimeout(function () { enterApp(); }, 800);
-          return;
-        }
-      } catch (al) { }
-      // If auto-login failed, email confirmation is probably still on
-      showMsg('registerMsg', '✅ Account created! Your admin will activate your account shortly.', 'success');
-      setTimeout(function () { switchTab('login'); }, 3000);
     }
+
+    // Don't auto-login a pending rep — sign out any session that signUp may have created
+    try { await sb.auth.signOut(); } catch (e) { /* best effort */ }
+    currentUser = null;
+    showPendingApprovalScreen();
+    return;
 
   } catch (e) {
     var msg = e.message || 'Registration failed';
@@ -599,6 +580,21 @@ window.userRegister = async function () {
   }
   btn.disabled = false; btn.textContent = 'Create Account →';
 };
+
+// Shows the success/pending message after registration and resets the form.
+function showPendingApprovalScreen() {
+  showMsg('registerMsg',
+    '⏳ Account created — awaiting manager approval. You can log in once your manager activates your account.',
+    'success');
+  // Clear form
+  ['regName', 'regEmail', 'regPhone', 'regPassword', 'regTeamCode'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  var btn = document.getElementById('registerBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Create Account →'; }
+  // Drop user back to login tab after a few seconds
+  setTimeout(function () { try { switchTab('login'); } catch (e) { } }, 4500);
+}
 
 // ════════════════════════════════════════════════════════
 //  USER LOGIN
@@ -624,6 +620,20 @@ window.userLogin = async function () {
 
       if (!profileCheck.error && profileCheck.data) {
         var prof = profileCheck.data;
+        if (prof.status === 'pending') {
+          await sb.auth.signOut();
+          currentUser = null;
+          showMsg('loginMsg', '⏳ Your account is awaiting manager approval. Please contact your manager.');
+          btn.disabled = false; btn.textContent = 'Login →';
+          return;
+        }
+        if (prof.status === 'rejected') {
+          await sb.auth.signOut();
+          currentUser = null;
+          showMsg('loginMsg', '❌ Your registration was not approved. Please contact your manager.');
+          btn.disabled = false; btn.textContent = 'Login →';
+          return;
+        }
         if (prof.status === 'suspended') {
           await sb.auth.signOut();
           currentUser = null;
@@ -1001,6 +1011,15 @@ window.loadUsers = async function () {
     var pending = data.filter(function (u) { return u.status === 'pending'; }).length;
     updateAdminStats(data.length, active, suspended, pending);
 
+    // Sort: pending first (loudest), then active, then suspended/rejected
+    var sortRank = { pending: 0, active: 1, suspended: 2, rejected: 3 };
+    data.sort(function (a, b) {
+      var ra = sortRank[a.status] != null ? sortRank[a.status] : 4;
+      var rb = sortRank[b.status] != null ? sortRank[b.status] : 4;
+      if (ra !== rb) return ra - rb;
+      return (b.created_at || '').localeCompare(a.created_at || '');
+    });
+
     var body = document.getElementById('usersBody');
     body.textContent = ''; // Safe clear — no innerHTML
 
@@ -1083,30 +1102,60 @@ window.loadUsers = async function () {
 
       // Actions cell
       var tdActions = document.createElement('td');
-      var resetBtn = document.createElement('button');
-      resetBtn.className = 'action-btn reset';
-      resetBtn.textContent = '✉️ Reset PW';
-      resetBtn.dataset.email = u.email;
-      resetBtn.addEventListener('click', function (e) {
-        window.adminResetPw(e.target.dataset.email);
-      });
-      tdActions.appendChild(resetBtn);
 
-      var toggleBtn = document.createElement('button');
-      if (u.status !== 'suspended') {
-        toggleBtn.className = 'action-btn suspend';
-        toggleBtn.textContent = '🚫 Suspend';
-        toggleBtn.addEventListener('click', function () {
-          window.adminToggleStatus(u.id, 'suspended');
+      if (u.status === 'pending') {
+        // Pending — show Approve + Reject (no Reset PW yet)
+        var approveBtn = document.createElement('button');
+        approveBtn.className = 'action-btn approve';
+        approveBtn.textContent = '✅ Approve';
+        approveBtn.addEventListener('click', function () {
+          window.adminApproveRep(u.id, u.full_name || u.email);
         });
+        tdActions.appendChild(approveBtn);
+
+        var rejectBtn = document.createElement('button');
+        rejectBtn.className = 'action-btn reject';
+        rejectBtn.textContent = '❌ Reject';
+        rejectBtn.addEventListener('click', function () {
+          window.adminRejectRep(u.id, u.full_name || u.email);
+        });
+        tdActions.appendChild(rejectBtn);
+      } else if (u.status === 'rejected') {
+        // Rejected — only Approve (re-activates)
+        var reApproveBtn = document.createElement('button');
+        reApproveBtn.className = 'action-btn approve';
+        reApproveBtn.textContent = '✅ Approve';
+        reApproveBtn.addEventListener('click', function () {
+          window.adminApproveRep(u.id, u.full_name || u.email);
+        });
+        tdActions.appendChild(reApproveBtn);
       } else {
-        toggleBtn.className = 'action-btn activate';
-        toggleBtn.textContent = '✅ Activate';
-        toggleBtn.addEventListener('click', function () {
-          window.adminToggleStatus(u.id, 'active');
+        // Active / Suspended — usual actions
+        var resetBtn = document.createElement('button');
+        resetBtn.className = 'action-btn reset';
+        resetBtn.textContent = '✉️ Reset PW';
+        resetBtn.dataset.email = u.email;
+        resetBtn.addEventListener('click', function (e) {
+          window.adminResetPw(e.target.dataset.email);
         });
+        tdActions.appendChild(resetBtn);
+
+        var toggleBtn = document.createElement('button');
+        if (u.status !== 'suspended') {
+          toggleBtn.className = 'action-btn suspend';
+          toggleBtn.textContent = '🚫 Suspend';
+          toggleBtn.addEventListener('click', function () {
+            window.adminToggleStatus(u.id, 'suspended');
+          });
+        } else {
+          toggleBtn.className = 'action-btn activate';
+          toggleBtn.textContent = '✅ Activate';
+          toggleBtn.addEventListener('click', function () {
+            window.adminToggleStatus(u.id, 'active');
+          });
+        }
+        tdActions.appendChild(toggleBtn);
       }
-      tdActions.appendChild(toggleBtn);
       tr.appendChild(tdActions);
 
       body.appendChild(tr);
@@ -1256,6 +1305,28 @@ window.adminToggleStatus = async function (userId, newStatus) {
     var sb = _sb;
     var res = await sb.from('user_profiles').update({ status: newStatus }).eq('id', userId);
     if (res.error) throw res.error;
+    window.loadUsers();
+  } catch (e) { await appAlert('Failed: ' + e.message, '❌'); }
+};
+
+window.adminApproveRep = async function (userId, label) {
+  var ok = await appConfirm('Approve ' + (label || 'this rep') + '? They will be able to log in.', '✅');
+  if (!ok) return;
+  try {
+    var res = await _sb.from('user_profiles').update({ status: 'active' }).eq('id', userId);
+    if (res.error) throw res.error;
+    showToast('✅ ' + (label || 'Rep') + ' approved');
+    window.loadUsers();
+  } catch (e) { await appAlert('Failed: ' + e.message, '❌'); }
+};
+
+window.adminRejectRep = async function (userId, label) {
+  var ok = await appConfirm('Reject registration for ' + (label || 'this rep') + '? They will not be able to log in.', '❌');
+  if (!ok) return;
+  try {
+    var res = await _sb.from('user_profiles').update({ status: 'rejected' }).eq('id', userId);
+    if (res.error) throw res.error;
+    showToast('❌ ' + (label || 'Rep') + ' rejected');
     window.loadUsers();
   } catch (e) { await appAlert('Failed: ' + e.message, '❌'); }
 };
