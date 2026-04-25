@@ -726,6 +726,38 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     CELERAPPS SUPER ADMIN — OTP (2FA)
+══════════════════════════════════════════ -->
+<div class="auth-screen" id="superOtpScreen">
+  <div class="auth-card super-auth-card">
+    <div class="auth-back" onclick="superAdminBackToPassword()">← Back</div>
+    <div class="auth-logo-wrap super">
+      <span class="icon">📧</span>
+      <h2>Verify it's you</h2>
+      <p>We sent a 6-digit code to <strong id="superOtpEmail">your email</strong></p>
+    </div>
+    <div class="field-group">
+      <label>🔢 One-Time Code</label>
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+             class="field-input super-focus" id="superOtpInput"
+             placeholder="123456" autocomplete="one-time-code"
+             style="letter-spacing:6px;text-align:center;font-size:18px;font-weight:600"
+             onkeydown="if(event.key==='Enter')superAdminVerifyOtp()">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:8px 0 12px;cursor:pointer">
+      <input type="checkbox" id="superOtpTrust" checked style="cursor:pointer">
+      Trust this device for 7 days
+    </label>
+    <button class="auth-btn gold" onclick="superAdminVerifyOtp()">Verify →</button>
+    <button id="superOtpResendBtn" onclick="superAdminResendOtp()"
+            style="margin-top:10px;background:transparent;border:1px solid var(--border2);color:var(--muted);padding:8px;border-radius:8px;font-size:12px;cursor:pointer;width:100%">
+      Resend code
+    </button>
+    <div class="auth-msg" id="superOtpMsg"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      CELERAPPS SUPER ADMIN PANEL
 ══════════════════════════════════════════ -->
 <div id="superPanel" style="display:none">

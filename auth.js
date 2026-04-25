@@ -1635,11 +1635,42 @@ window.loadLeaderboard = async function (days) {
 // Default SUPER_HASH (hardcoded in auth.js line 61) is the CelerApps master key
 var CELERAPPS_SUPER_HASH = '87859159d3dcdf468afe630139ba14d72603a795a085c25ca60c1ad6c3c154b7';
 
+// 2FA — Email OTP (Supabase Auth) for Super Admin
+var CELERAPPS_SUPER_EMAIL = 'hello@celerapps.com';
+var SUPER_TRUST_DAYS = 7;
+var SUPER_TRUST_KEY = '__celer_super_trust_v1';
+
 // H-7 FIX: Rate limiting for super admin login
 var _superAttempts = 0;
 var _superLockedUntil = 0;
 var SUPER_MAX_ATTEMPTS = 3;
 var SUPER_LOCKOUT_MS = 60000; // 60 seconds
+
+// OTP rate limiting + resend cooldown
+var _superOtpAttempts = 0;
+var _superOtpLockedUntil = 0;
+var _superResendUntil = 0;
+var SUPER_OTP_MAX_ATTEMPTS = 5;
+var SUPER_OTP_LOCKOUT_MS = 60000;
+var SUPER_RESEND_COOLDOWN_MS = 60000;
+var _superResendTimer = null;
+
+// Trust-this-device helpers (signed localStorage flag, expires after SUPER_TRUST_DAYS)
+function isSuperDeviceTrusted() {
+  try {
+    var raw = localStorage.getItem(SUPER_TRUST_KEY);
+    if (!raw) return false;
+    var data = JSON.parse(raw);
+    return data && data.exp && Date.now() < data.exp;
+  } catch (e) { return false; }
+}
+function setSuperDeviceTrusted() {
+  try {
+    localStorage.setItem(SUPER_TRUST_KEY, JSON.stringify({
+      exp: Date.now() + (SUPER_TRUST_DAYS * 24 * 60 * 60 * 1000)
+    }));
+  } catch (e) { /* localStorage unavailable */ }
+}
 
 // Triple-click footer to reveal super admin login
 (function () {
@@ -1690,9 +1721,113 @@ window.superAdminLogin = async function () {
     return;
   }
   _superAttempts = 0;
-  document.getElementById('superAuthScreen').classList.remove('visible');
+  document.getElementById('superAdminPass').value = '';
+
+  // Step 2 — 2FA: skip OTP if device is trusted, otherwise send email OTP
+  if (isSuperDeviceTrusted()) {
+    document.getElementById('superAuthScreen').classList.remove('visible');
+    enterSuperConsole();
+    return;
+  }
+  await requestSuperOtp(true);
+};
+
+function enterSuperConsole() {
   document.getElementById('superPanel').style.display = 'block';
   loadAllTenants();
+}
+
+async function requestSuperOtp(switchScreen) {
+  var msgId = switchScreen ? 'superAdminMsg' : 'superOtpMsg';
+  showMsg(msgId, '⏳ Sending OTP to ' + CELERAPPS_SUPER_EMAIL + '…');
+  try {
+    var res = await _sb.auth.signInWithOtp({ email: CELERAPPS_SUPER_EMAIL });
+    if (res.error) throw res.error;
+    if (switchScreen) {
+      document.getElementById('superAuthScreen').classList.remove('visible');
+      document.getElementById('superOtpScreen').classList.add('visible');
+      var emailSpan = document.getElementById('superOtpEmail');
+      if (emailSpan) emailSpan.textContent = CELERAPPS_SUPER_EMAIL;
+      var inp = document.getElementById('superOtpInput');
+      if (inp) { inp.value = ''; setTimeout(function () { inp.focus(); }, 200); }
+    }
+    showMsg('superOtpMsg', '✅ Code sent to ' + CELERAPPS_SUPER_EMAIL + '. Check your inbox.', 'success');
+    _superResendUntil = Date.now() + SUPER_RESEND_COOLDOWN_MS;
+    startResendCountdown();
+  } catch (e) {
+    showMsg(msgId, '❌ Failed to send OTP: ' + (e.message || 'unknown error'));
+  }
+}
+
+function startResendCountdown() {
+  var btn = document.getElementById('superOtpResendBtn');
+  if (!btn) return;
+  if (_superResendTimer) clearInterval(_superResendTimer);
+  function tick() {
+    var ms = _superResendUntil - Date.now();
+    if (ms <= 0) {
+      btn.disabled = false;
+      btn.textContent = 'Resend code';
+      clearInterval(_superResendTimer);
+      _superResendTimer = null;
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Resend in ' + Math.ceil(ms / 1000) + 's';
+  }
+  tick();
+  _superResendTimer = setInterval(tick, 1000);
+}
+
+window.superAdminVerifyOtp = async function () {
+  if (Date.now() < _superOtpLockedUntil) {
+    var secs = Math.ceil((_superOtpLockedUntil - Date.now()) / 1000);
+    showMsg('superOtpMsg', '🔒 Too many failed attempts. Try again in ' + secs + 's');
+    return;
+  }
+  var token = (document.getElementById('superOtpInput').value || '').trim();
+  if (!/^\d{6}$/.test(token)) return showMsg('superOtpMsg', '❌ Enter the 6-digit code from your email');
+  try {
+    var res = await _sb.auth.verifyOtp({ email: CELERAPPS_SUPER_EMAIL, token: token, type: 'email' });
+    if (res.error) {
+      _superOtpAttempts++;
+      var remaining = SUPER_OTP_MAX_ATTEMPTS - _superOtpAttempts;
+      if (_superOtpAttempts >= SUPER_OTP_MAX_ATTEMPTS) {
+        _superOtpLockedUntil = Date.now() + SUPER_OTP_LOCKOUT_MS;
+        _superOtpAttempts = 0;
+        showMsg('superOtpMsg', '🔒 Too many failed attempts. Locked for 60 seconds.');
+      } else {
+        showMsg('superOtpMsg', '❌ Invalid or expired code. ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining.');
+      }
+      document.getElementById('superOtpInput').value = '';
+      return;
+    }
+    // Verified — sign out the temp Supabase session immediately so it doesn't
+    // collide with rep/admin flows. Local super admin access is granted via flag.
+    try { await _sb.auth.signOut(); } catch (e) { /* best effort */ }
+    _superOtpAttempts = 0;
+    var trustChk = document.getElementById('superOtpTrust');
+    if (trustChk && trustChk.checked) setSuperDeviceTrusted();
+    if (_superResendTimer) { clearInterval(_superResendTimer); _superResendTimer = null; }
+    document.getElementById('superOtpScreen').classList.remove('visible');
+    document.getElementById('superOtpInput').value = '';
+    enterSuperConsole();
+  } catch (e) {
+    showMsg('superOtpMsg', '❌ ' + (e.message || 'Verification failed'));
+  }
+};
+
+window.superAdminResendOtp = async function () {
+  if (Date.now() < _superResendUntil) return; // button is disabled, but guard anyway
+  await requestSuperOtp(false);
+};
+
+window.superAdminBackToPassword = function () {
+  if (_superResendTimer) { clearInterval(_superResendTimer); _superResendTimer = null; }
+  document.getElementById('superOtpScreen').classList.remove('visible');
+  document.getElementById('superOtpInput').value = '';
+  document.getElementById('superAuthScreen').classList.add('visible');
+  setTimeout(function () { document.getElementById('superAdminPass').focus(); }, 200);
 };
 
 window.superAdminLogout = function () {
