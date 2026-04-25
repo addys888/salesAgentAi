@@ -1788,7 +1788,13 @@ window.superAdminVerifyOtp = async function () {
   var token = (document.getElementById('superOtpInput').value || '').trim();
   if (!/^\d{6}$/.test(token)) return showMsg('superOtpMsg', '❌ Enter the 6-digit code from your email');
   try {
+    // Try 'email' type first; fall back to 'magiclink' (signInWithOtp uses
+    // the magic-link flow under the hood on some Supabase setups).
     var res = await _sb.auth.verifyOtp({ email: CELERAPPS_SUPER_EMAIL, token: token, type: 'email' });
+    if (res.error && (res.error.status === 403 || /token|otp|invalid|type/i.test(res.error.message || ''))) {
+      console.warn('verifyOtp(email) failed, retrying as magiclink:', res.error);
+      res = await _sb.auth.verifyOtp({ email: CELERAPPS_SUPER_EMAIL, token: token, type: 'magiclink' });
+    }
     if (res.error) {
       console.warn('verifyOtp error:', res.error);
       _superOtpAttempts++;
