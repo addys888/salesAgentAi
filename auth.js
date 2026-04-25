@@ -884,31 +884,40 @@ window.adminLogin = async function () {
 
   try {
     var hash = await sha256(p);
-    // Multi-tenant: match against current tenant's hashes
-    // M-7 FIX: Accept any username — only validate password hash
-    var validAdmin = (hash === ADMIN_HASH);
-    var validSuper = (hash === SUPER_HASH);
+    // Multi-tenant: validate username + password hash against the tenant.
+    // Username is now configurable per tenant (column: tenants.admin_username).
+    var validAdmin = false;
+    var validSuper = false;
 
-    // If no tenant loaded yet, try to find tenant by admin_hash match
+    // If a tenant is already loaded, validate username + hash against it
+    if (currentTenant && u === (currentTenant.admin_username || 'admin')) {
+      validAdmin = (hash === ADMIN_HASH);
+      validSuper = (hash === SUPER_HASH);
+    }
+
+    // If not validated yet, look up tenant by (username + hash) combo
     if (!validAdmin && !validSuper && _sb) {
       try {
         var tenantRes = await _sb.from('tenants')
           .select('*')
+          .eq('admin_username', u)
+          .eq('is_active', true)
           .or('admin_hash.eq.' + hash + ',super_hash.eq.' + hash)
-          .single();
-        if (!tenantRes.error && tenantRes.data) {
-          currentTenant = tenantRes.data;
-          ADMIN_HASH = tenantRes.data.admin_hash;
-          SUPER_HASH = tenantRes.data.super_hash;
-          MAX_REPS = tenantRes.data.max_reps || 10;
-          validAdmin = (hash === ADMIN_HASH);
-          validSuper = (hash === SUPER_HASH);
+          .limit(1);
+        if (!tenantRes.error && tenantRes.data && tenantRes.data.length > 0) {
+          var t = tenantRes.data[0];
+          currentTenant = t;
+          ADMIN_HASH = t.admin_hash;
+          SUPER_HASH = t.super_hash;
+          MAX_REPS = t.max_reps || 10;
+          validAdmin = (hash === t.admin_hash);
+          validSuper = (hash === t.super_hash);
           // Apply tenant branding
-          APP_CONFIG.appName = tenantRes.data.app_name || APP_CONFIG.appName;
-          APP_CONFIG.appSubtitle = tenantRes.data.app_subtitle || APP_CONFIG.appSubtitle;
-          APP_CONFIG.appEmoji = tenantRes.data.app_emoji || APP_CONFIG.appEmoji;
-          APP_CONFIG.landingTitle = tenantRes.data.landing_title || APP_CONFIG.landingTitle;
-          APP_CONFIG.landingTagline = tenantRes.data.landing_tagline || APP_CONFIG.landingTagline;
+          APP_CONFIG.appName = t.app_name || APP_CONFIG.appName;
+          APP_CONFIG.appSubtitle = t.app_subtitle || APP_CONFIG.appSubtitle;
+          APP_CONFIG.appEmoji = t.app_emoji || APP_CONFIG.appEmoji;
+          APP_CONFIG.landingTitle = t.landing_title || APP_CONFIG.landingTitle;
+          APP_CONFIG.landingTagline = t.landing_tagline || APP_CONFIG.landingTagline;
           applyAppConfig();
         }
       } catch (te) { console.warn('Tenant lookup:', te.message); }
@@ -1912,11 +1921,13 @@ window.addNewTenant = async function () {
   var tagline = document.getElementById('ntTagline').value.trim();
   var teamCode = document.getElementById('ntTeamCode').value.trim().toUpperCase();
   var maxReps = parseInt(document.getElementById('ntMaxReps').value) || 15;
+  var adminUser = (document.getElementById('ntAdminUser').value || '').trim() || 'admin';
   var adminPass = document.getElementById('ntAdminPass').value.trim();
   var subEnd = document.getElementById('ntSubEnd').value || null;
 
   if (!name) return showMsg('addTenantMsg', '❌ Company name is required');
   if (!teamCode) return showMsg('addTenantMsg', '❌ Team code is required');
+  if (!/^[a-zA-Z0-9._-]{2,32}$/.test(adminUser)) return showMsg('addTenantMsg', '❌ Admin username must be 2-32 chars (letters, numbers, . _ -)');
   if (!adminPass) return showMsg('addTenantMsg', '❌ Admin password is required');
   if (adminPass.length < 8) return showMsg('addTenantMsg', '❌ Admin password must be at least 8 characters');
 
@@ -1945,6 +1956,7 @@ window.addNewTenant = async function () {
       landing_tagline: tagline || 'Smart sales dialing for your team',
       primary_color: color,
       team_code: teamCode,
+      admin_username: adminUser,
       admin_hash: adminHash,
       super_hash: superHash,
       max_reps: maxReps,
@@ -1969,6 +1981,7 @@ window.addNewTenant = async function () {
     });
     document.getElementById('ntMaxReps').value = '15';
     document.getElementById('ntColor').value = '#25D366';
+    document.getElementById('ntAdminUser').value = 'admin';
 
     // Refresh tenants list
     loadAllTenants();
