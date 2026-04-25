@@ -2096,6 +2096,17 @@ window.loadAllTenants = async function () {
 
       // Actions cell
       var tdActions = document.createElement('td');
+
+      // Reset Admin Password button
+      var resetPwBtn = document.createElement('button');
+      resetPwBtn.className = 'action-btn';
+      resetPwBtn.textContent = '🔑 Reset PW';
+      resetPwBtn.title = 'Reset this tenant\'s admin password';
+      resetPwBtn.addEventListener('click', function () {
+        resetTenantAdminPassword(t.id, t.app_name || t.slug, t.admin_username || 'admin');
+      });
+      tdActions.appendChild(resetPwBtn);
+
       var actionBtn = document.createElement('button');
       actionBtn.className = 'action-btn' + (t.is_active ? ' danger' : '');
       actionBtn.textContent = t.is_active ? 'Disable' : 'Enable';
@@ -2111,6 +2122,53 @@ window.loadAllTenants = async function () {
     });
   } catch (e) {
     console.error('Load tenants:', e);
+  }
+};
+
+// ── Reset a Tenant's Admin Password (Super Admin only) ─
+window.resetTenantAdminPassword = async function (tenantId, tenantLabel, adminUser) {
+  if (!_sb) return;
+  // Step 1: warn what we're doing
+  var ok = await appConfirm(
+    'Reset admin password for "' + tenantLabel + '"?\n\n' +
+    'After saving, the only way the manager can log in is with the NEW password you set.\n' +
+    'Please share the new password with them securely.',
+    '🔑'
+  );
+  if (!ok) return;
+
+  // Step 2: ask for new password (window.prompt is fine here — Super Admin only feature)
+  var newPass = window.prompt('Enter NEW admin password for "' + tenantLabel + '" (admin user: ' + adminUser + ')\n\nMust be at least 8 characters.');
+  if (newPass === null) return; // cancelled
+  newPass = newPass.trim();
+  if (newPass.length < 8) {
+    await appAlert('❌ Password must be at least 8 characters. Nothing changed.', '❌');
+    return;
+  }
+
+  // Step 3: confirm by re-typing (prevents accidental typos locking the tenant out)
+  var confirmPass = window.prompt('Re-enter the same password to confirm:');
+  if (confirmPass === null) return;
+  if (confirmPass.trim() !== newPass) {
+    await appAlert('❌ Passwords did not match. Nothing changed.', '❌');
+    return;
+  }
+
+  // Step 4: hash + update
+  try {
+    var newHash = await sha256(newPass);
+    var res = await _sb.from('tenants').update({ admin_hash: newHash }).eq('id', tenantId);
+    if (res.error) throw res.error;
+    showToast('✅ Admin password reset for ' + tenantLabel);
+    await appAlert(
+      '✅ Admin password updated for "' + tenantLabel + '".\n\n' +
+      'Username: ' + adminUser + '\n' +
+      'Password: ' + newPass + '\n\n' +
+      'Share these credentials with the manager securely. This dialog will not show the password again.',
+      '🔑'
+    );
+  } catch (e) {
+    await appAlert('Failed to reset password: ' + e.message, '❌');
   }
 };
 
