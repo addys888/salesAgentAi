@@ -2,6 +2,27 @@
 //  AUTH.JS — Configuration, Supabase, Authentication, Admin Panel
 // ════════════════════════════════════════════════════════
 
+// ─── Capture password-recovery state SYNCHRONOUSLY at script load ───
+// supabase-js (detectSessionInUrl=true) consumes the URL hash during
+// createClient(); by the time DOMContentLoaded fires the hash is gone
+// and any recovery indicator with it. We must read window.location BEFORE
+// initSupabase() runs.
+(function captureRecoveryEarly() {
+  try {
+    var h = window.location.hash || '';
+    var s = window.location.search || '';
+    var isRecovery =
+      h.indexOf('type=recovery') !== -1 ||
+      s.indexOf('type=recovery') !== -1 ||
+      /[?&]code=/.test(s);
+    if (isRecovery) {
+      window._inPasswordRecovery = true;
+      console.log('[auth] Password-recovery URL detected at load.');
+    }
+  } catch (e) { console.warn('[auth] recovery capture failed:', e); }
+})();
+
+
 // ════════════════════════════════════════════════════════
 //  APP CONFIG — Edit everything here for each client
 // ════════════════════════════════════════════════════════
@@ -110,7 +131,8 @@ function initSupabase() {
       // or PKCE ?code=). Without this listener, the PKCE code exchange
       // silently logs the user in instead of showing the reset overlay.
       try {
-        _sb.auth.onAuthStateChange(function (event) {
+        _sb.auth.onAuthStateChange(function (event, session) {
+          console.log('[auth] state change:', event, !!session);
           if (event === 'PASSWORD_RECOVERY') {
             window._inPasswordRecovery = true;
             var overlay = document.getElementById('resetPwOverlay');
@@ -296,12 +318,18 @@ window.addEventListener('DOMContentLoaded', async function () {
 
   await loadMaxReps();
 
-  // If a recovery is in progress (PASSWORD_RECOVERY fired or URL still
-  // carries a recovery code), don't auto-enter the app — let the reset
-  // overlay handle it.
-  if (window._inPasswordRecovery || /[?&]code=/.test(window.location.search)) {
+  // If a recovery is in progress (captured at script load, fired via
+  // PASSWORD_RECOVERY event, or URL still carries a recovery code/hash),
+  // don't auto-enter the app — let the reset overlay handle it.
+  if (
+    window._inPasswordRecovery ||
+    /[?&]code=/.test(window.location.search) ||
+    (window.location.hash || '').indexOf('type=recovery') !== -1
+  ) {
+    console.log('[auth] Recovery flow active — showing reset overlay, skipping auto-login.');
     var ovl = document.getElementById('resetPwOverlay');
     if (ovl) ovl.style.display = 'flex';
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
     return;
   }
 
