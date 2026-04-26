@@ -1103,6 +1103,28 @@ window.loadUsers = async function () {
       tdPhone.textContent = u.phone_number || '—';
       tr.appendChild(tdPhone);
 
+      // Specialty cell — inline editable (drives skill-based lead routing)
+      var tdSpec = document.createElement('td');
+      var specInput = document.createElement('input');
+      specInput.type = 'text';
+      specInput.value = u.specialty || '';
+      specInput.placeholder = 'e.g. Home Loan';
+      specInput.className = 'sub-input';
+      specInput.style.cssText = 'width:120px;font-size:11px';
+      specInput.title = 'Set specialty for skill-based lead routing (free-text, case-insensitive)';
+      specInput.dataset.userId = u.id;
+      specInput.dataset.original = u.specialty || '';
+      specInput.addEventListener('blur', function (e) {
+        var newVal = (e.target.value || '').trim();
+        if (newVal === e.target.dataset.original) return;
+        window.adminSetSpecialty(e.target.dataset.userId, newVal, e.target);
+      });
+      specInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') e.target.blur();
+      });
+      tdSpec.appendChild(specInput);
+      tr.appendChild(tdSpec);
+
       // Registered date cell
       var tdDate = document.createElement('td');
       tdDate.style.cssText = 'color:var(--muted);font-size:11px';
@@ -1351,6 +1373,20 @@ window.adminResetPw = async function (email) {
     if (res.error) throw res.error;
     await appAlert('✅ Password reset email sent to ' + email, '✅');
   } catch (e) { await appAlert('❌ Failed: ' + e.message, '❌'); }
+};
+
+window.adminSetSpecialty = async function (userId, value, inputEl) {
+  try {
+    var res = await _sb.from('user_profiles')
+      .update({ specialty: value || null })
+      .eq('id', userId);
+    if (res.error) throw res.error;
+    if (inputEl) inputEl.dataset.original = value;
+    showToast(value ? '✅ Specialty set: ' + value : '✅ Specialty cleared');
+  } catch (e) {
+    if (inputEl) inputEl.value = inputEl.dataset.original || '';
+    await appAlert('Failed to update specialty: ' + e.message, '❌');
+  }
 };
 
 window.adminToggleStatus = async function (userId, newStatus) {
@@ -2507,6 +2543,13 @@ window.loadAdminLeads = async function () {
       tdSource.textContent = (sourceIcons[lead.source] || '📥') + ' ' + (lead.source || 'unknown');
       tdSource.style.fontSize = '11px';
       tr.appendChild(tdSource);
+
+      // Specialty (read-only — set by webhook, drives routing)
+      var tdSpec = document.createElement('td');
+      tdSpec.textContent = lead.specialty || '—';
+      tdSpec.style.fontSize = '11px';
+      tdSpec.style.color = lead.specialty ? 'var(--green)' : 'var(--muted)';
+      tr.appendChild(tdSpec);
 
       // Interest
       var tdInt = document.createElement('td');

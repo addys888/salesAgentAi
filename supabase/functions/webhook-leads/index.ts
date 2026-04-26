@@ -97,8 +97,8 @@ serve(async (req: Request) => {
         return jsonResponse(400, { error: 'Invalid phone number' })
       }
 
-      // ── Round-robin: assign to rep with fewest leads ──
-      const assignedTo = await getNextRep(sb, tenant.id)
+      // ── Round-robin (specialty-aware): assign to eligible rep with fewest leads ──
+      const assignedTo = await getNextRep(sb, tenant.id, lead.specialty)
 
       // ── Insert lead (upsert to handle duplicates) ──
       const { data: inserted, error: insertErr } = await sb
@@ -112,6 +112,7 @@ serve(async (req: Request) => {
           source: lead.source || 'website',
           source_detail: lead.source_detail || null,
           interest: lead.interest || null,
+          specialty: lead.specialty || null,
           // raw_data column dropped for storage cost optimization
           status: 'new',
         }, {
@@ -164,6 +165,7 @@ interface LeadData {
   source: string
   source_detail?: string
   interest?: string
+  specialty?: string
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -179,6 +181,7 @@ function parseGenericLead(body: any): LeadData {
     source: body.source || 'website',
     source_detail: body.source_detail || body.campaign || body.form_name || body.utm_source || '',
     interest: body.interest || body.product || body.message || body.requirement || '',
+    specialty: body.specialty || body.category || body.lead_type || '',
   }
 }
 
@@ -239,16 +242,32 @@ function normalizePhone(raw: string): string {
 // ═══════════════════════════════════════════════════════════
 //  ROUND-ROBIN ASSIGNMENT
 // ═══════════════════════════════════════════════════════════
-async function getNextRep(sb: any, tenantId: string): Promise<string | null> {
+async function getNextRep(sb: any, tenantId: string, specialty?: string): Promise<string | null> {
   try {
-    // Get all active reps for this tenant
-    const { data: reps } = await sb
+    // Get all active reps for this tenant (with specialty so we can filter)
+    const { data: allReps } = await sb
       .from('user_profiles')
-      .select('id')
+      .select('id, specialty')
       .eq('tenant_id', tenantId)
       .eq('status', 'active')
 
-    if (!reps || reps.length === 0) return null
+    if (!allReps || allReps.length === 0) return null
+
+    // Specialty filter: case-insensitive match. Falls back to all reps
+    // if no specialty given, or if no rep matches (don't lose the lead).
+    let reps = allReps
+    if (specialty && specialty.trim()) {
+      const wanted = specialty.trim().toLowerCase()
+      const matched = allReps.filter((r: any) =>
+        (r.specialty || '').trim().toLowerCase() === wanted
+      )
+      if (matched.length > 0) {
+        reps = matched
+        console.log('[webhook] Specialty match:', wanted, '→', matched.length, 'rep(s)')
+      } else {
+        console.log('[webhook] No specialty match for:', wanted, '— falling back to all reps')
+      }
+    }
 
     // Count existing leads per rep (only 'new' status — already called leads don't count)
     const { data: counts } = await sb
