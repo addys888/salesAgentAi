@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS leads (
 
   -- Lead context
   interest TEXT,                                -- "Home Loan 50L", "3BHK Sector 150", "MBA Course"
-  raw_data JSONB DEFAULT '{}',                  -- Full original webhook payload for debugging
+  -- raw_data JSONB DEFAULT '{}',  -- DROPPED in migration_leads_cost_optimize.sql (storage savings)
 
   -- Status (matches dialer outcomes)
   status TEXT DEFAULT 'new',                    -- 'new', 'called', 'interested', 'not_interested', 'callback', 'invalid'

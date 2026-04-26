@@ -112,7 +112,7 @@ serve(async (req: Request) => {
           source: lead.source || 'website',
           source_detail: lead.source_detail || null,
           interest: lead.interest || null,
-          raw_data: body,
+          // raw_data column dropped for storage cost optimization
           status: 'new',
         }, {
           onConflict: 'tenant_id,phone',
