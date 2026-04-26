@@ -1,0 +1,8 @@
+# Supabase project config
+# Project ref: dxxrcnsfmuqbgaixsbig
+
+[functions.webhook-leads]
+# Public webhook endpoint — must accept anonymous calls from Zapier,
+# Pabbly, Facebook Lead Ads, IndiaMart, generic web forms, etc.
+# Auth is enforced inside the function via tenant.webhook_secret check.
+verify_jwt = false
