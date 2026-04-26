@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS leads (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  assigned_to UUID REFERENCES auth.users(id),
+  assigned_to UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
 
   -- Contact info (same fields the dialer uses)
   full_name TEXT,
