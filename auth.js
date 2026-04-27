@@ -2395,11 +2395,13 @@ window.loadGlobalStats = async function () {
       repCounts[tid] = (repCounts[tid] || 0) + 1;
     });
 
-    // Get all daily stats — C-5 FIX: use correct column names matching saveDailyStats()
-    var statsRes = await _sb.from('daily_stats').select('user_id, called, interested, callback, avg_call_duration, user_profiles!inner(tenant_id)');
+    // Get all daily stats — read tenant_id directly from daily_stats (own column,
+    // populated by saveDailyStats). Avoid inner-join via user_profiles because that
+    // FK targets auth.users, so PostgREST embedding silently returns 0 rows.
+    var statsRes = await _sb.from('daily_stats').select('tenant_id, called, interested, callback, avg_call_duration');
     var tenantStats = {};
     (statsRes.data || []).forEach(function (s) {
-      var tid = (s.user_profiles && s.user_profiles.tenant_id) || 'none';
+      var tid = s.tenant_id || 'none';
       if (!tenantStats[tid]) tenantStats[tid] = { calls: 0, interested: 0, callbacks: 0, totalDur: 0, durCount: 0 };
       tenantStats[tid].calls += (s.called || 0);
       tenantStats[tid].interested += (s.interested || 0);
