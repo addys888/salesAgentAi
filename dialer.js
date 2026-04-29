@@ -616,8 +616,9 @@ function _advanceToNextContact() {
   currentIndex = findNextPending();
   updateStats(); showContact(currentIndex);
   markDirty(); autoSaveSession();
-  // Save daily stats on every 5th call
-  if(calledCount % 5 === 0) saveDailyStats();
+  // Save daily stats after every call (idempotent upsert — 1 row/user/day,
+  // so analytics + leaderboard reflect activity immediately).
+  if(calledCount > 0) saveDailyStats();
 }
 
 window.skipContact = function() {
