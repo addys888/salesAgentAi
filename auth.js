@@ -2205,56 +2205,12 @@ window.loadAllTenants = async function () {
         toggleTenantActive(e.target.dataset.tenantId, e.target.dataset.newState === 'true');
       });
       tdActions.appendChild(actionBtn);
-
-      // Delete tenant button
-      var deleteBtn = document.createElement('button');
-      deleteBtn.className = 'action-btn reject';
-      deleteBtn.textContent = '🗑 Delete';
-      deleteBtn.title = 'Permanently delete this tenant';
-      deleteBtn.style.cssText = 'display:block;margin-top:5px';
-      deleteBtn.addEventListener('click', (function (tid, tname) {
-        return function () { deleteTenant(tid, tname); };
-      })(t.id, t.app_name || t.slug));
-      tdActions.appendChild(deleteBtn);
-
       tr.appendChild(tdActions);
 
       body.appendChild(tr);
     });
   } catch (e) {
     console.error('Load tenants:', e);
-  }
-};
-
-// ── Delete a Tenant (Super Admin only) ─────────────────
-window.deleteTenant = async function (tenantId, tenantName) {
-  if (!_sb || !isSuperAdmin) return;
-
-  // Warn if reps are attached
-  var repRes = await _sb.from('user_profiles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId);
-  var repCount = repRes.count || 0;
-
-  var warnMsg = repCount > 0
-    ? '"' + tenantName + '" has ' + repCount + ' registered rep' + (repCount > 1 ? 's' : '') + '.\n\nDeleting the tenant will NOT automatically remove their Supabase auth accounts. You\'ll need to clean those up separately.\n\nDelete anyway?'
-    : 'Permanently delete "' + tenantName + '"?\n\nThis removes the tenant record and all its leads/sessions. This cannot be undone.';
-
-  var ok = await appConfirm(warnMsg, '🗑');
-  if (!ok) return;
-
-  var ok2 = await appConfirm('FINAL CONFIRM: Delete "' + tenantName + '" forever?', '⛔');
-  if (!ok2) return;
-
-  try {
-    var res = await _sb.from('tenants').delete().eq('id', tenantId).select('id');
-    if (res.error) throw res.error;
-    if (!res.data || res.data.length === 0) {
-      await appAlert('❌ Delete blocked — run supabase/add_tenant_delete_policy.sql in your Supabase dashboard first.', '⛔');
-      return;
-    }
-    showToast('🗑 Tenant "' + tenantName + '" deleted.');
-    loadAllTenants();
-  } catch (e) {
-    await appAlert('❌ Delete failed: ' + e.message, '❌');
   }
 };
 
