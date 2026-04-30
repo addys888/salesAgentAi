@@ -82,47 +82,85 @@ var TEMPLATES = {
 };
 
 // ════════════════════════════════════════════════════════
-//  CELERAPPS-ONLY TEMPLATES — DialKaro Product Sales
+//  CELERAPPS-ONLY TEMPLATES — Product Sales
 //  Visible ONLY to reps on the 'dialkaro' tenant (CelerApps internal team).
-//  Update DIALKARO_DEMO_VIDEO with the actual public demo video link.
+//  Structure: CELERAPPS_TEMPLATES[productKey] → { label, emoji, demoVideo, items }
+//  Each item.text(name, repName, demoVideo) → message string
+//  Update demoVideo URLs below with actual public links.
 // ════════════════════════════════════════════════════════
 
-var DIALKARO_DEMO_VIDEO = 'https://youtu.be/REPLACE_WITH_DEMO_LINK';
-
 var CELERAPPS_TEMPLATES = {
-  dk_fresh: {
-    name: '🆕 DialKaro – Fresh Lead',
-    text: {
-      en: function (n, r) {
-        return 'Hi ' + (n || 'there') + '! 👋\n\n' +
-          'I\'m ' + (r || 'from the DialKaro team') + ' — reaching out from *DialKaro* by CelerApps.\n\n' +
-          'We help sales teams across India dial faster, track every call, and close more — all from one simple app.\n\n' +
-          '🎥 See it in 90 seconds: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
-          'Worth a look? I can walk you through it personally — 10 mins, no pitch, just the product. 🙌';
+  dialkaro: {
+    label: 'DialKaro',
+    emoji: '☎️',
+    demoVideo: 'https://youtu.be/REPLACE_WITH_DIALKARO_DEMO',
+    items: {
+      fresh: {
+        name: '🆕 Fresh Lead',
+        text: function (n, r, v) {
+          return 'Hi ' + (n || 'there') + '! 👋\n\n' +
+            'I\'m ' + (r || 'from the DialKaro team') + ' — reaching out from *DialKaro* by CelerApps.\n\n' +
+            'We help sales teams across India dial faster, track every call, and close more — all from one simple app.\n\n' +
+            '🎥 See it in 90 seconds: ' + v + '\n\n' +
+            'Worth a look? I can walk you through it personally — 10 mins, no pitch, just the product. 🙌';
+        }
+      },
+      discussed: {
+        name: '💬 Partially Discussed',
+        text: function (n, r, v) {
+          return 'Hi ' + (n || 'there') + '! 👋\n\n' +
+            (r || 'DialKaro team') + ' here — following up on our last chat.\n\n' +
+            'I know you\'re still evaluating. Here\'s the demo so your team can see it directly — no waiting for a call:\n\n' +
+            '🎥 ' + v + '\n\n' +
+            'Tell me one thing you\'d need to see before deciding — I\'ll address it straight away. 💪';
+        }
+      },
+      closing: {
+        name: '🔥 Almost Converted',
+        text: function (n, r, v) {
+          return 'Hi ' + (n || 'there') + '! 🔥\n\n' +
+            (r || 'DialKaro team') + ' here — just checking in before you finalise.\n\n' +
+            'We\'re wrapping up onboarding slots this month and I\'d love to get your team live this week itself.\n\n' +
+            '🎥 One last look: ' + v + '\n\n' +
+            '20 mins call — and your team could be up and running the same day.\n\nShall we lock it in? ✅';
+        }
       }
     }
   },
-  dk_discussed: {
-    name: '💬 DialKaro – Partially Discussed',
-    text: {
-      en: function (n, r) {
-        return 'Hi ' + (n || 'there') + '! 👋\n\n' +
-          (r || 'DialKaro team') + ' here — following up on our last chat.\n\n' +
-          'I know you\'re still evaluating. Here\'s the demo so your team can see it directly — no waiting for a call:\n\n' +
-          '🎥 ' + DIALKARO_DEMO_VIDEO + '\n\n' +
-          'Tell me one thing you\'d need to see before deciding — I\'ll address it straight away. 💪';
-      }
-    }
-  },
-  dk_closing: {
-    name: '🔥 DialKaro – Almost Converted',
-    text: {
-      en: function (n, r) {
-        return 'Hi ' + (n || 'there') + '! 🔥\n\n' +
-          (r || 'DialKaro team') + ' here — just checking in before you finalise.\n\n' +
-          'We\'re wrapping up onboarding slots this month and I\'d love to get your team live this week itself.\n\n' +
-          '🎥 One last look: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
-          '20 mins call — and your team could be up and running the same day.\n\nShall we lock it in? ✅';
+  billkaro: {
+    label: 'BillKaro',
+    emoji: '🧾',
+    demoVideo: 'https://youtu.be/REPLACE_WITH_BILLKARO_DEMO',
+    items: {
+      fresh: {
+        name: '🆕 Fresh Lead',
+        text: function (n, r, v) {
+          return 'Hi ' + (n || 'there') + '! 👋\n\n' +
+            'I\'m ' + (r || 'from the BillKaro team') + ' — reaching out from *BillKaro* by CelerApps.\n\n' +
+            'We help Indian businesses create GST invoices, manage billing, and get paid faster — all from one simple app.\n\n' +
+            '🎥 See it in 90 seconds: ' + v + '\n\n' +
+            'Worth a look? I can walk you through it — 10 mins, no pitch, just the product. 🙌';
+        }
+      },
+      discussed: {
+        name: '💬 Partially Discussed',
+        text: function (n, r, v) {
+          return 'Hi ' + (n || 'there') + '! 👋\n\n' +
+            (r || 'BillKaro team') + ' here — following up on our last conversation.\n\n' +
+            'I know you\'re still evaluating. Here\'s the demo so you can see it directly — no waiting for a call:\n\n' +
+            '🎥 ' + v + '\n\n' +
+            'Tell me one thing you\'d need to see before deciding — I\'ll address it straight away. 💪';
+        }
+      },
+      closing: {
+        name: '🔥 Almost Converted',
+        text: function (n, r, v) {
+          return 'Hi ' + (n || 'there') + '! 🔥\n\n' +
+            (r || 'BillKaro team') + ' here — just checking in before you finalise.\n\n' +
+            'We\'re closing onboarding slots this month and I\'d love to get you set up this week itself.\n\n' +
+            '🎥 One last look: ' + v + '\n\n' +
+            '20 mins call — and you could be sending your first GST invoice the same day.\n\nShall we lock it in? ✅';
+        }
       }
     }
   }

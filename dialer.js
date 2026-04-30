@@ -983,16 +983,51 @@ window.openTemplates = function (key) {
   var langSel = document.getElementById('tplLang');
   var waNum = (c.countryCode || '91') + (c.countryCode ? c.number.replace(new RegExp('^' + (c.countryCode || '91')), '') : (c.number || ''));
 
-  // CelerApps Product Sales category — dedicated chip, English only
+  // CelerApps Product Sales category — product selector then templates
   if (key === 'celerapps') {
     if (langSel) langSel.style.display = 'none';
-    if (typeof CELERAPPS_TEMPLATES !== 'undefined') {
-      Object.entries(CELERAPPS_TEMPLATES).forEach(function (entry) {
-        var cTpl = entry[1];
-        var msg = cTpl.text['en'](c.name, repN);
-        list.appendChild(_buildTplItem(msg, cTpl.name, waNum, 'rgba(255,171,64,.8)'));
+    if (typeof CELERAPPS_TEMPLATES === 'undefined') {
+      document.getElementById('tplModal').classList.add('open');
+      return;
+    }
+
+    // Product selector row
+    var selRow = document.createElement('div');
+    selRow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(255,171,64,.2)';
+    var selLbl = document.createElement('span');
+    selLbl.style.cssText = 'font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap';
+    selLbl.textContent = '⚡ Product:';
+    var prodSel = document.createElement('select');
+    prodSel.style.cssText = 'background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.3);color:var(--warn);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;flex:1;outline:none';
+    Object.entries(CELERAPPS_TEMPLATES).forEach(function (entry) {
+      var prod = entry[1];
+      var opt = document.createElement('option');
+      opt.value = entry[0];
+      opt.textContent = prod.emoji + ' ' + prod.label;
+      prodSel.appendChild(opt);
+    });
+    selRow.appendChild(selLbl);
+    selRow.appendChild(prodSel);
+    list.appendChild(selRow);
+
+    // Template items container (re-populated on product change)
+    var itemsDiv = document.createElement('div');
+    list.appendChild(itemsDiv);
+
+    function renderProduct(productKey) {
+      itemsDiv.textContent = '';
+      var prod = CELERAPPS_TEMPLATES[productKey];
+      if (!prod) return;
+      Object.entries(prod.items).forEach(function (entry) {
+        var tpl = entry[1];
+        var msg = tpl.text(c.name, repN, prod.demoVideo);
+        itemsDiv.appendChild(_buildTplItem(msg, tpl.name, waNum, 'rgba(255,171,64,.8)'));
       });
     }
+
+    prodSel.addEventListener('change', function () { renderProduct(prodSel.value); });
+    renderProduct(prodSel.value); // load first product by default
+
     document.getElementById('tplModal').classList.add('open');
     return;
   }
