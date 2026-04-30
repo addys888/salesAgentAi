@@ -978,6 +978,49 @@ window.openTemplates = function() {
     div.addEventListener('click', function(){ window.open(waUrl,'_blank'); document.getElementById('tplModal').classList.remove('open'); });
     list.appendChild(div);
   });
+
+  // CelerApps-only DialKaro product sales templates (dialkaro tenant reps only)
+  if (typeof CELERAPPS_TEMPLATES !== 'undefined' && currentTenant && currentTenant.slug === 'dialkaro') {
+    var divider = document.createElement('div');
+    divider.style.cssText = 'border-top:1px solid rgba(255,171,64,.2);margin:14px 0 8px;padding-top:2px';
+    var divLabel = document.createElement('div');
+    divLabel.style.cssText = 'font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--warn);text-transform:uppercase;margin-bottom:8px';
+    divLabel.textContent = '⚡ CelerApps · DialKaro Product Sales';
+    divider.appendChild(divLabel);
+    list.appendChild(divider);
+
+    Object.entries(CELERAPPS_TEMPLATES).forEach(function(cEntry) {
+      var cTpl = cEntry[1];
+      var textFn = cTpl.text['en'];
+      var msg = textFn(c.name, repN);
+      var waNum = (c.countryCode||'91') + (c.countryCode ? c.number.replace(new RegExp('^'+(c.countryCode||'91')),'') : c.number);
+      var waUrl = 'https://wa.me/'+waNum+'?text='+encodeURIComponent(msg);
+
+      var div = document.createElement('div');
+      div.className = 'tpl-item';
+      div.style.borderColor = 'rgba(255,171,64,.3)';
+
+      var nameDiv = document.createElement('div');
+      nameDiv.className = 'tpl-name';
+      nameDiv.style.color = 'var(--warn)';
+      nameDiv.textContent = cTpl.name;
+
+      var previewDiv = document.createElement('div');
+      previewDiv.className = 'tpl-preview';
+      previewDiv.textContent = msg.substring(0,160) + (msg.length > 160 ? '...' : '');
+
+      var sendDiv = document.createElement('div');
+      sendDiv.className = 'tpl-send';
+      sendDiv.textContent = '👆 Tap to open in WhatsApp';
+
+      div.appendChild(nameDiv);
+      div.appendChild(previewDiv);
+      div.appendChild(sendDiv);
+      div.addEventListener('click', function(){ window.open(waUrl,'_blank'); document.getElementById('tplModal').classList.remove('open'); });
+      list.appendChild(div);
+    });
+  }
+
   document.getElementById('tplModal').classList.add('open');
 };
 

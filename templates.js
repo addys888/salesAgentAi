@@ -81,6 +81,58 @@ var TEMPLATES = {
   }
 };
 
+// ════════════════════════════════════════════════════════
+//  CELERAPPS-ONLY TEMPLATES — DialKaro Product Sales
+//  Visible ONLY to reps on the 'dialkaro' tenant (CelerApps internal team).
+//  Update DIALKARO_DEMO_VIDEO with the actual public demo video link.
+// ════════════════════════════════════════════════════════
+
+var DIALKARO_DEMO_VIDEO = 'https://youtu.be/REPLACE_WITH_DEMO_LINK';
+
+var CELERAPPS_TEMPLATES = {
+  dk_fresh: {
+    name: '🆕 DialKaro – Fresh Lead',
+    text: {
+      en: function (n, r) {
+        return 'Hi ' + (n || 'there') + '! 👋\n\n' +
+          'I\'m ' + (r || 'your CelerApps advisor') + ' from *CelerApps*.\n\n' +
+          'We just launched *DialKaro* — India\'s smartest sales dialer for outbound teams.\n\n' +
+          '✅ Auto-dial leads from any source\n' +
+          '✅ Real-time leaderboard & analytics\n' +
+          '✅ Built for Indian sales teams\n\n' +
+          '▶️ See it in action: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
+          'Can we set up a quick 10-min demo? 📅';
+      }
+    }
+  },
+  dk_discussed: {
+    name: '💬 DialKaro – Partially Discussed',
+    text: {
+      en: function (n, r) {
+        return 'Hi ' + (n || 'there') + '! 🙏\n\n' +
+          'This is ' + (r || 'your CelerApps advisor') + ' — following up on our chat about *DialKaro*.\n\n' +
+          'I\'d love for you to see the product in action — here\'s a walkthrough your team can watch anytime:\n\n' +
+          '▶️ Demo: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
+          'Happy to answer any questions or put together a custom plan for your team size.\n\nWhen works best for a quick call? 📞';
+      }
+    }
+  },
+  dk_closing: {
+    name: '🔥 DialKaro – Almost Converted',
+    text: {
+      en: function (n, r) {
+        return 'Hi ' + (n || 'there') + '! 🎯\n\n' +
+          'Great to know you\'re keen on *DialKaro* — this is ' + (r || 'your CelerApps advisor') + '.\n\n' +
+          'Quick heads-up — we have a *limited onboarding offer* running this month:\n' +
+          '🎁 Free setup + first month at no cost for early clients\n\n' +
+          'Watch the full demo one more time before we finalise:\n' +
+          '▶️ ' + DIALKARO_DEMO_VIDEO + '\n\n' +
+          'Ready to get your team dialing smarter? Let\'s close this today! 🤝';
+      }
+    }
+  }
+};
+
 // ── Current selected language (persisted to localStorage) ──
 var _tplLang = 'en';
 try { _tplLang = localStorage.getItem('tplLang') || 'en'; } catch(e) {}
