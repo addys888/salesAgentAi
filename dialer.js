@@ -979,8 +979,13 @@ window.openTemplates = function() {
     list.appendChild(div);
   });
 
-  // CelerApps-only DialKaro product sales templates (dialkaro tenant reps only)
-  if (typeof CELERAPPS_TEMPLATES !== 'undefined' && currentTenant && currentTenant.slug === 'dialkaro') {
+  // CelerApps-only DialKaro product sales templates
+  // Shown when tenant slug matches OR on CelerApps-owned hostnames (dev + production).
+  // Hostname fallback handles cases where currentTenant hasn't loaded yet.
+  var _host = window.location.hostname;
+  var _isCelerHost = _host === 'dialkaro.celerapps.com' || _host.endsWith('.github.io') || _host === 'localhost' || _host === '127.0.0.1';
+  var _isCelerTenant = (currentTenant && currentTenant.slug === 'dialkaro') || _isCelerHost;
+  if (typeof CELERAPPS_TEMPLATES !== 'undefined' && _isCelerTenant) {
     var divider = document.createElement('div');
     divider.style.cssText = 'border-top:1px solid rgba(255,171,64,.2);margin:14px 0 8px;padding-top:2px';
     var divLabel = document.createElement('div');
