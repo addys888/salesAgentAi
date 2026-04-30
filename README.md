@@ -21,19 +21,37 @@ salesAgentAi/
 ├── supabase/               # 📦 Database scripts
 │   ├── migration_multi_tenant.sql  # Initial schema + RLS
 │   ├── add_team_codes.sql          # Team code column
-│   ├── add_client_xyz.sql          # XYZ Consulting tenant
 │   ├── add_subscription_column.sql # Subscription end date
-│   └── fix_tenant_rls.sql          # INSERT/UPDATE RLS policies
+│   ├── fix_tenant_rls.sql          # INSERT/UPDATE RLS policies
+│   ├── migration_leads.sql         # Lead auto-capture schema
+│   └── functions/                  # Supabase Edge Functions
+│
+├── branding/               # 🎨 DialKaro marketing & sales
+│   ├── dialkaro/           #   ↳ Marketing assets
+│   │   ├── DAY1_CHECKLIST.md
+│   │   ├── LOOM_DEMO_SCRIPT.md
+│   │   ├── LINKEDIN_SHOWCASE_SETUP.md
+│   │   ├── LINKEDIN_POSTS_WEEK1.md
+│   │   ├── COLD_OUTREACH_TEMPLATES.md
+│   │   ├── BLOG_POST_1.md
+│   │   ├── demo-sample-leads.csv
+│   │   ├── demo_tenant_seed.sql
+│   │   └── campaign/      #   ↳ 🚀 Sales Campaign Kit
+│   │       ├── SALES_PLAYBOOK.md       # 30-day lead gen plan
+│   │       ├── ICP_TARGET_LIST.md      # Who to target + where
+│   │       ├── PROSPECTING_SCRIPTS.md  # Search queries for leads
+│   │       ├── DEMO_FLOW.md            # Live demo playbook
+│   │       ├── PRICING_PLAYBOOK.md     # Pricing + objections
+│   │       ├── WHATSAPP_SEQUENCES.md   # Drip sequences
+│   │       └── TRACKER_TEMPLATE.csv    # Lead tracker CSV
+│   └── promo/              #   ↳ Promo banners & assets
 │
 ├── clients/                # 🏢 Client onboarding
-│   ├── _template/
-│   │   └── onboarding.md   #   ↳ Copy for new clients
-│   ├── xyz-consulting/
-│   │   └── config.md       #   ↳ Credentials & branding
 │   └── ONBOARDING_GUIDE.md #   ↳ Full step-by-step guide
 │
 └── docs/                   # 📄 Product documentation
-    └── PRODUCT_DEFAULT.md  #   ↳ Default tenant config
+    ├── PRODUCT_DEFAULT.md   #   ↳ Default tenant config
+    └── lead-capture-setup.md #  ↳ Webhook setup guide
 ```
 
 ## How Multi-Tenancy Works
@@ -85,7 +103,7 @@ Hidden platform admin accessible only to CelerApps team:
 ## Subscription Enforcement
 
 | Days Remaining | What Happens |
-|---------------|--------------|
+|---------------|--------------| 
 | > 7 days | ✅ Normal access |
 | ≤ 7 days | ⚠️ Amber warning banner for all reps & admins |
 | Expired | 🔒 All logins blocked (reps, admins, registration) |
@@ -108,10 +126,27 @@ Hidden platform admin accessible only to CelerApps team:
 ### Option B: Manual SQL (~10 min)
 See `clients/ONBOARDING_GUIDE.md` for full steps.
 
+## Sales Campaign
+
+> 🚀 **No active clients yet?** Start here → [`branding/dialkaro/campaign/SALES_PLAYBOOK.md`](branding/dialkaro/campaign/SALES_PLAYBOOK.md)
+
+The `campaign/` folder contains a complete 30-day lead generation system:
+
+| Document | Purpose |
+|----------|---------|
+| **SALES_PLAYBOOK.md** | Master 30-day plan — follow day by day |
+| **ICP_TARGET_LIST.md** | Who to sell to + where to find them |
+| **PROSPECTING_SCRIPTS.md** | Exact search queries for IndiaMART, JustDial, LinkedIn |
+| **DEMO_FLOW.md** | 15-min live demo structure + objection handling |
+| **PRICING_PLAYBOOK.md** | Pricing tiers + value anchoring + competitive positioning |
+| **WHATSAPP_SEQUENCES.md** | Full drip sequences per customer segment |
+| **TRACKER_TEMPLATE.csv** | Import into DialKaro to track your own prospects |
+
 ## SQL Scripts (run in order for fresh setup)
 ```bash
 1. supabase/migration_multi_tenant.sql  # Core schema
 2. supabase/add_team_codes.sql          # Team codes
 3. supabase/add_subscription_column.sql # Subscription dates
 4. supabase/fix_tenant_rls.sql          # RLS write policies
+5. supabase/migration_leads.sql         # Lead auto-capture
 ```
