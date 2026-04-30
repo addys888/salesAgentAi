@@ -93,7 +93,7 @@ var CELERAPPS_TEMPLATES = {
   dialkaro: {
     label: 'DialKaro',
     emoji: '☎️',
-    demoVideo: 'https://youtu.be/REPLACE_WITH_DIALKARO_DEMO',
+    demoVideo: 'https://www.loom.com/share/539f4b4efe694ede9bcd3233f6dedd58',
     items: {
       fresh: {
         name: '🆕 Fresh Lead',
