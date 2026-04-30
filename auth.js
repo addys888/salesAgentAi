@@ -2245,8 +2245,12 @@ window.deleteTenant = async function (tenantId, tenantName) {
   if (!ok2) return;
 
   try {
-    var res = await _sb.from('tenants').delete().eq('id', tenantId);
+    var res = await _sb.from('tenants').delete().eq('id', tenantId).select('id');
     if (res.error) throw res.error;
+    if (!res.data || res.data.length === 0) {
+      await appAlert('❌ Delete blocked — run supabase/add_tenant_delete_policy.sql in your Supabase dashboard first.', '⛔');
+      return;
+    }
     showToast('🗑 Tenant "' + tenantName + '" deleted.');
     loadAllTenants();
   } catch (e) {
