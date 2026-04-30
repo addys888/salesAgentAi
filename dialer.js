@@ -999,6 +999,13 @@ window.openTemplates = function (key) {
     selLbl.textContent = '⚡ Product:';
     var prodSel = document.createElement('select');
     prodSel.style.cssText = 'background:rgba(255,171,64,.1);border:1px solid rgba(255,171,64,.3);color:var(--warn);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;flex:1;outline:none';
+    // Placeholder option — forces the rep to choose a product
+    var placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.textContent = '— Select a product —';
+    placeholderOpt.disabled = true;
+    placeholderOpt.selected = true;
+    prodSel.appendChild(placeholderOpt);
     Object.entries(CELERAPPS_TEMPLATES).forEach(function (entry) {
       var prod = entry[1];
       var opt = document.createElement('option');
@@ -1014,6 +1021,12 @@ window.openTemplates = function (key) {
     var itemsDiv = document.createElement('div');
     list.appendChild(itemsDiv);
 
+    // Prompt shown until a product is selected
+    var promptDiv = document.createElement('div');
+    promptDiv.style.cssText = 'text-align:center;padding:32px 16px;color:var(--muted);font-size:13px';
+    promptDiv.textContent = '👆 Pick a product above to see templates';
+    itemsDiv.appendChild(promptDiv);
+
     function renderProduct(productKey) {
       itemsDiv.textContent = '';
       var prod = CELERAPPS_TEMPLATES[productKey];
@@ -1026,7 +1039,6 @@ window.openTemplates = function (key) {
     }
 
     prodSel.addEventListener('change', function () { renderProduct(prodSel.value); });
-    renderProduct(prodSel.value); // load first product by default
 
     document.getElementById('tplModal').classList.add('open');
     return;
