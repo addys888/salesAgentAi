@@ -95,13 +95,10 @@ var CELERAPPS_TEMPLATES = {
     text: {
       en: function (n, r) {
         return 'Hi ' + (n || 'there') + '! 👋\n\n' +
-          'I\'m ' + (r || 'your CelerApps advisor') + ' from *CelerApps*.\n\n' +
-          'We just launched *DialKaro* — India\'s smartest sales dialer for outbound teams.\n\n' +
-          '✅ Auto-dial leads from any source\n' +
-          '✅ Real-time leaderboard & analytics\n' +
-          '✅ Built for Indian sales teams\n\n' +
-          '▶️ See it in action: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
-          'Can we set up a quick 10-min demo? 📅';
+          'I\'m ' + (r || 'from the DialKaro team') + ' — reaching out from *DialKaro* by CelerApps.\n\n' +
+          'We help sales teams across India dial faster, track every call, and close more — all from one simple app.\n\n' +
+          '🎥 See it in 90 seconds: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
+          'Worth a look? I can walk you through it personally — 10 mins, no pitch, just the product. 🙌';
       }
     }
   },
@@ -109,11 +106,11 @@ var CELERAPPS_TEMPLATES = {
     name: '💬 DialKaro – Partially Discussed',
     text: {
       en: function (n, r) {
-        return 'Hi ' + (n || 'there') + '! 🙏\n\n' +
-          'This is ' + (r || 'your CelerApps advisor') + ' — following up on our chat about *DialKaro*.\n\n' +
-          'I\'d love for you to see the product in action — here\'s a walkthrough your team can watch anytime:\n\n' +
-          '▶️ Demo: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
-          'Happy to answer any questions or put together a custom plan for your team size.\n\nWhen works best for a quick call? 📞';
+        return 'Hi ' + (n || 'there') + '! 👋\n\n' +
+          (r || 'DialKaro team') + ' here — following up on our last chat.\n\n' +
+          'I know you\'re still evaluating. Here\'s the demo so your team can see it directly — no waiting for a call:\n\n' +
+          '🎥 ' + DIALKARO_DEMO_VIDEO + '\n\n' +
+          'Tell me one thing you\'d need to see before deciding — I\'ll address it straight away. 💪';
       }
     }
   },
@@ -121,13 +118,11 @@ var CELERAPPS_TEMPLATES = {
     name: '🔥 DialKaro – Almost Converted',
     text: {
       en: function (n, r) {
-        return 'Hi ' + (n || 'there') + '! 🎯\n\n' +
-          'Great to know you\'re keen on *DialKaro* — this is ' + (r || 'your CelerApps advisor') + '.\n\n' +
-          'Quick heads-up — we have a *limited onboarding offer* running this month:\n' +
-          '🎁 Free setup + first month at no cost for early clients\n\n' +
-          'Watch the full demo one more time before we finalise:\n' +
-          '▶️ ' + DIALKARO_DEMO_VIDEO + '\n\n' +
-          'Ready to get your team dialing smarter? Let\'s close this today! 🤝';
+        return 'Hi ' + (n || 'there') + '! 🔥\n\n' +
+          (r || 'DialKaro team') + ' here — just checking in before you finalise.\n\n' +
+          'We\'re wrapping up onboarding slots this month and I\'d love to get your team live this week itself.\n\n' +
+          '🎥 One last look: ' + DIALKARO_DEMO_VIDEO + '\n\n' +
+          '20 mins call — and your team could be up and running the same day.\n\nShall we lock it in? ✅';
       }
     }
   }
