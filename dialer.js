@@ -184,7 +184,7 @@ window.loadFromLeads = async function() {
     document.getElementById('statsBar').style.display = 'grid';
     document.getElementById('dialerPanel').style.display = 'block';
     currentIndex = 0; calledCount = 0; skippedCount = 0;
-    buildTable(); updateStats(); showContact(0);
+    buildTable(); updateStats(); showContact(0); _showCelerChip();
   } catch(e) {
     appAlert('Failed to load leads: ' + (e.message || e), '❌');
   }
@@ -398,7 +398,7 @@ window.startQueue = function() {
   document.getElementById('statsBar').style.display = 'grid';
   document.getElementById('dialerPanel').style.display = 'block';
   currentIndex=0; calledCount=0; skippedCount=0;
-  buildTable(); updateStats(); showContact(0);
+  buildTable(); updateStats(); showContact(0); _showCelerChip();
 };
 
 function buildTable() {
@@ -939,99 +939,84 @@ function getRepName() {
   return meta.full_name || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || 'Sales Advisor';
 }
 
-window.openTemplates = function() {
+// Show/hide the CelerApps chip based on tenant (called when dialer panel opens)
+function _showCelerChip() {
+  var chip = document.getElementById('tplChipCeler');
+  if (!chip) return;
+  var h = window.location.hostname;
+  var show = (currentTenant && currentTenant.slug === 'dialkaro') ||
+             h === 'dialkaro.celerapps.com' || h.endsWith('.github.io') ||
+             h === 'localhost' || h === '127.0.0.1';
+  chip.style.display = show ? 'inline-block' : 'none';
+}
+
+var _currentTplKey = null;
+
+function _buildTplItem(msg, label, waNum, accentColor) {
+  var waUrl = 'https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg);
+  var div = document.createElement('div');
+  div.className = 'tpl-item';
+  if (accentColor) div.style.borderColor = accentColor;
+  var nameDiv = document.createElement('div');
+  nameDiv.className = 'tpl-name';
+  if (accentColor) nameDiv.style.color = accentColor;
+  nameDiv.textContent = label;
+  var previewDiv = document.createElement('div');
+  previewDiv.className = 'tpl-preview';
+  previewDiv.textContent = msg.substring(0, 160) + (msg.length > 160 ? '...' : '');
+  var sendDiv = document.createElement('div');
+  sendDiv.className = 'tpl-send';
+  sendDiv.textContent = '👆 Tap to open in WhatsApp';
+  div.appendChild(nameDiv);
+  div.appendChild(previewDiv);
+  div.appendChild(sendDiv);
+  div.addEventListener('click', function () { window.open(waUrl, '_blank'); document.getElementById('tplModal').classList.remove('open'); });
+  return div;
+}
+
+window.openTemplates = function (key) {
+  _currentTplKey = key || null;
   var c = contacts[currentIndex] || {};
   var repN = getRepName();
-  var lang = getTplLang();
   var list = document.getElementById('tplList');
   list.textContent = '';
-  // Set language selector value
   var langSel = document.getElementById('tplLang');
-  if(langSel) langSel.value = lang;
+  var waNum = (c.countryCode || '91') + (c.countryCode ? c.number.replace(new RegExp('^' + (c.countryCode || '91')), '') : (c.number || ''));
 
-  Object.entries(TEMPLATES).forEach(function(entry){
-    var key=entry[0], tpl=entry[1];
+  // CelerApps Product Sales category — dedicated chip, English only
+  if (key === 'celerapps') {
+    if (langSel) langSel.style.display = 'none';
+    if (typeof CELERAPPS_TEMPLATES !== 'undefined') {
+      Object.entries(CELERAPPS_TEMPLATES).forEach(function (entry) {
+        var cTpl = entry[1];
+        var msg = cTpl.text['en'](c.name, repN);
+        list.appendChild(_buildTplItem(msg, cTpl.name, waNum, 'rgba(255,171,64,.8)'));
+      });
+    }
+    document.getElementById('tplModal').classList.add('open');
+    return;
+  }
+
+  // Standard templates — show one category or all
+  if (langSel) langSel.style.display = '';
+  var lang = getTplLang();
+  if (langSel) langSel.value = lang;
+  var langLabel = TEMPLATE_LANGS.find(function (l) { return l.code === lang; });
+  var tplsToShow = (key && TEMPLATES[key]) ? [[key, TEMPLATES[key]]] : Object.entries(TEMPLATES);
+  tplsToShow.forEach(function (entry) {
+    var tpl = entry[1];
     var textFn = tpl.text[lang] || tpl.text['en'];
     var msg = textFn(c.name, repN);
-    var waNum = (c.countryCode||'91') + (c.countryCode ? c.number.replace(new RegExp('^'+(c.countryCode||'91')),'') : c.number);
-    var waUrl = 'https://wa.me/'+waNum+'?text='+encodeURIComponent(msg);
-
-    var div = document.createElement('div');
-    div.className = 'tpl-item';
-
-    var nameDiv = document.createElement('div');
-    nameDiv.className = 'tpl-name';
-    var langLabel = TEMPLATE_LANGS.find(function(l){ return l.code === lang; });
-    nameDiv.textContent = tpl.name + (langLabel ? ' \u00B7 ' + langLabel.label : '');
-
-    var previewDiv = document.createElement('div');
-    previewDiv.className = 'tpl-preview';
-    previewDiv.textContent = msg.substring(0,160) + (msg.length > 160 ? '...' : '');
-
-    var sendDiv = document.createElement('div');
-    sendDiv.className = 'tpl-send';
-    sendDiv.textContent = '\uD83D\uDC46 Tap to open in WhatsApp';
-
-    div.appendChild(nameDiv);
-    div.appendChild(previewDiv);
-    div.appendChild(sendDiv);
-    div.addEventListener('click', function(){ window.open(waUrl,'_blank'); document.getElementById('tplModal').classList.remove('open'); });
-    list.appendChild(div);
+    var label = tpl.name + (langLabel ? ' · ' + langLabel.label : '');
+    list.appendChild(_buildTplItem(msg, label, waNum, null));
   });
-
-  // CelerApps-only DialKaro product sales templates
-  // Shown when tenant slug matches OR on CelerApps-owned hostnames (dev + production).
-  // Hostname fallback handles cases where currentTenant hasn't loaded yet.
-  var _host = window.location.hostname;
-  var _isCelerHost = _host === 'dialkaro.celerapps.com' || _host.endsWith('.github.io') || _host === 'localhost' || _host === '127.0.0.1';
-  var _isCelerTenant = (currentTenant && currentTenant.slug === 'dialkaro') || _isCelerHost;
-  if (typeof CELERAPPS_TEMPLATES !== 'undefined' && _isCelerTenant) {
-    var divider = document.createElement('div');
-    divider.style.cssText = 'border-top:1px solid rgba(255,171,64,.2);margin:14px 0 8px;padding-top:2px';
-    var divLabel = document.createElement('div');
-    divLabel.style.cssText = 'font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--warn);text-transform:uppercase;margin-bottom:8px';
-    divLabel.textContent = '⚡ CelerApps · DialKaro Product Sales';
-    divider.appendChild(divLabel);
-    list.appendChild(divider);
-
-    Object.entries(CELERAPPS_TEMPLATES).forEach(function(cEntry) {
-      var cTpl = cEntry[1];
-      var textFn = cTpl.text['en'];
-      var msg = textFn(c.name, repN);
-      var waNum = (c.countryCode||'91') + (c.countryCode ? c.number.replace(new RegExp('^'+(c.countryCode||'91')),'') : c.number);
-      var waUrl = 'https://wa.me/'+waNum+'?text='+encodeURIComponent(msg);
-
-      var div = document.createElement('div');
-      div.className = 'tpl-item';
-      div.style.borderColor = 'rgba(255,171,64,.3)';
-
-      var nameDiv = document.createElement('div');
-      nameDiv.className = 'tpl-name';
-      nameDiv.style.color = 'var(--warn)';
-      nameDiv.textContent = cTpl.name;
-
-      var previewDiv = document.createElement('div');
-      previewDiv.className = 'tpl-preview';
-      previewDiv.textContent = msg.substring(0,160) + (msg.length > 160 ? '...' : '');
-
-      var sendDiv = document.createElement('div');
-      sendDiv.className = 'tpl-send';
-      sendDiv.textContent = '👆 Tap to open in WhatsApp';
-
-      div.appendChild(nameDiv);
-      div.appendChild(previewDiv);
-      div.appendChild(sendDiv);
-      div.addEventListener('click', function(){ window.open(waUrl,'_blank'); document.getElementById('tplModal').classList.remove('open'); });
-      list.appendChild(div);
-    });
-  }
 
   document.getElementById('tplModal').classList.add('open');
 };
 
-window.onTplLangChange = function(sel) {
+window.onTplLangChange = function (sel) {
   setTplLang(sel.value);
-  window.openTemplates(); // Re-render with new language
+  window.openTemplates(_currentTplKey);
 };
 
 // ════════════════════════════════════════════════════════
