@@ -101,7 +101,7 @@ var CELERAPPS_TEMPLATES = {
           return 'Hi ' + (n || 'there') + '! 👋\n\n' +
             'I\'m ' + (r || 'from the DialKaro team') + ' — reaching out from *DialKaro* by CelerApps.\n\n' +
             'We help sales teams across India dial faster, track every call, and close more — all from one simple app.\n\n' +
-            '🎥 See it in 90 seconds: ' + v + '\n\n' +
+            '🎥 See it in 60 seconds: ' + v + '\n\n' +
             'Worth a look? I can walk you through it personally — 10 mins, no pitch, just the product. 🙌';
         }
       },
