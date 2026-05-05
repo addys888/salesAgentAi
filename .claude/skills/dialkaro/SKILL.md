@@ -104,6 +104,7 @@ Run migrations in this order on a fresh Supabase project:
 7. `migration_leads_cost_optimize.sql` — drops the unused `raw_data` JSONB column.
 8. `migration_specialty.sql` — adds `user_profiles.specialty` (free-text) and `leads.specialty` for skill-based routing.
 9. **`migration_security_week0.sql`** — Week-0 hardening (see [docs/SECURITY_WEEK0.md](../../../docs/SECURITY_WEEK0.md)). Creates `platform_secrets`, `public_tenants` view, and `SECURITY DEFINER` RPCs (`verify_tenant_admin`, `verify_super_admin`, `super_admin_*`, `tenant_admin_*`, `tenant_active_rep_count`). Revokes anon read/write on `tenants` and tightens `user_profiles` UPDATE.
+10. **`migration_security_week1.sql`** — Week-1 hardening (see [docs/SECURITY_WEEK1.md](../../../docs/SECURITY_WEEK1.md)). C4: status moves into `auth.users.raw_app_meta_data`, RLS on `call_sessions`/`callbacks`/`leads` writes requires `is_active_session()`. Self-guard trigger blocks reps from changing their own privileged columns. H3: trigger enforces `tenants.max_reps` on activation. H4: `leads` UPDATE → assigned only; DELETE → admin RPC only. New RPCs: `tenant_admin_list_reps`, `tenant_admin_delete_lead`, `_set_user_app_status` (private).
 
 ### Tables
 
@@ -195,6 +196,17 @@ The product is live; **as of the last update there were no paying clients yet** 
 - [DEMO_FLOW.md](../../../branding/dialkaro/campaign/DEMO_FLOW.md) — 15-min live demo structure with timing and objection handling
 - [PRICING_PLAYBOOK.md](../../../branding/dialkaro/campaign/PRICING_PLAYBOOK.md) — Starter ₹2,499 / Growth ₹4,999 / Scale ₹9,999 / Enterprise custom; 14-day free trial; early-adopter ₹1,999 lifetime lock
 - [WHATSAPP_SEQUENCES.md](../../../branding/dialkaro/campaign/WHATSAPP_SEQUENCES.md) — drip sequences per ICP segment
+
+## Week-1 hardening invariants (don't regress)
+
+After [migration_security_week1.sql](../../../supabase/migration_security_week1.sql) is applied:
+
+1. **Rep status lives in `auth.users.raw_app_meta_data.status`** — not just `user_profiles.status`. The `tenant_admin_update_rep_status` and `tenant_admin_set_rep_subscription` RPCs update both. Don't write directly to `user_profiles.status` from the client (the `_user_profile_self_guard` trigger blocks it for reps; the operational tables' RLS rejects pending JWTs anyway).
+2. **Operational tables (`call_sessions`, `callbacks`, `leads` write) require `is_active_session()`** — only reps whose JWT carries `app_metadata.status='active'` can write. A pending rep with a valid JWT silently fails (which is the desired C4 behavior).
+3. **`leads` UPDATE** — only `assigned_to = auth.uid() AND is_active_session()`. Don't reintroduce the wider `tenant_id IN (...)` policy. **`leads` DELETE** — only via `tenant_admin_delete_lead` RPC.
+4. **`tenants.max_reps` is enforced by trigger** — tenant_admin_update_rep_status raising `TENANT_FULL` is the H3 race-safe gate. Surface this to the user as "tenant just filled the last slot".
+5. **Registration flows through the `register-rep` Edge Function only** — never call `supabase.auth.signUp` from `userRegister` again. The Edge Function does Turnstile verification, slot check, and `auth.admin.createUser` with `app_metadata.status='pending'`.
+6. **`TURNSTILE_SITE_KEY` (JS) and `TURNSTILE_SECRET` (Edge Function env)** — both must be set for CAPTCHA to be active. Either side can fail-open during setup; both must be set for production protection.
 
 ## Week-0 hardening invariants (don't regress)
 

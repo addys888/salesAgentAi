@@ -76,6 +76,16 @@ function applyAppConfig() {
 // ════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
+
+// ── Cloudflare Turnstile (Week-1 H2 — CAPTCHA on rep registration) ──
+//  Set this to the real site key from your Cloudflare dashboard to activate.
+//  When left as the placeholder, the widget stays hidden and the Edge Function
+//  also skips Turnstile verification (useful for demos / before keys are set).
+//  Pair: set TURNSTILE_SECRET as a Supabase Edge Function env var:
+//    supabase secrets set TURNSTILE_SECRET=<your-secret-key>
+const TURNSTILE_SITE_KEY = 'REPLACE_WITH_YOUR_TURNSTILE_SITE_KEY';
+var _turnstileWidgetId = null;
+var _turnstileToken = null;
 const ADMIN_USER = 'admin';
 // Default rep cap — overridden once a tenant is loaded
 var MAX_REPS = 10;
@@ -463,6 +473,8 @@ window.switchTab = function (tab) {
   document.getElementById('tabLogin').className = 'auth-tab' + (tab === 'login' ? ' active' : '');
   document.getElementById('tabRegister').className = 'auth-tab' + (tab === 'register' ? ' active' : '');
   clearMsgs();
+  // Render CAPTCHA when the register tab opens (no-op if not configured)
+  if (tab === 'register') _renderTurnstile();
 };
 
 window.togglePw = function (id, eye) {
@@ -482,6 +494,53 @@ window.checkStrength = function (inp) {
   fill.style.width = (score * 25) + '%';
   fill.style.background = colors[score - 1] || 'transparent';
 };
+
+// ════════════════════════════════════════════════════════
+//  CLOUDFLARE TURNSTILE — Week-1 H2 (CAPTCHA on registration)
+// ════════════════════════════════════════════════════════
+function _isTurnstileConfigured() {
+  return typeof TURNSTILE_SITE_KEY === 'string'
+      && TURNSTILE_SITE_KEY
+      && TURNSTILE_SITE_KEY.indexOf('REPLACE_') !== 0;
+}
+
+// Called by the Turnstile CDN script once it loads (see ?onload=onTurnstileReady)
+window.onTurnstileReady = function () {
+  // If the register tab is already visible when CF finishes loading, render now.
+  var regForm = document.getElementById('registerForm');
+  if (regForm && regForm.style.display !== 'none') _renderTurnstile();
+};
+
+function _renderTurnstile() {
+  if (!_isTurnstileConfigured()) return;
+  if (typeof window.turnstile === 'undefined') return; // CDN not yet loaded
+  var container = document.getElementById('turnstileWidget');
+  if (!container) return;
+  container.style.display = 'block';
+  if (_turnstileWidgetId !== null) {
+    try { window.turnstile.reset(_turnstileWidgetId); } catch (e) {}
+    _turnstileToken = null;
+    return;
+  }
+  try {
+    _turnstileWidgetId = window.turnstile.render(container, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: 'dark',
+      'callback': function (token) { _turnstileToken = token; },
+      'expired-callback': function () { _turnstileToken = null; },
+      'error-callback': function () { _turnstileToken = null; }
+    });
+  } catch (e) {
+    console.warn('[turnstile] render failed:', e.message);
+  }
+}
+
+function _resetTurnstile() {
+  _turnstileToken = null;
+  if (_turnstileWidgetId !== null && typeof window.turnstile !== 'undefined') {
+    try { window.turnstile.reset(_turnstileWidgetId); } catch (e) {}
+  }
+}
 
 // ════════════════════════════════════════════════════════
 //  USER REGISTER
@@ -545,83 +604,58 @@ window.userRegister = async function () {
     }
 
     btn.textContent = '⏳ Creating...';
-    await loadMaxReps();
 
-    // H1 fix: slot check counts ACTIVE reps only — pending registrations no
-    //  longer block real reps. Uses tenant_active_rep_count() RPC.
+    // Week-1 H2: registration goes through the register-rep Edge Function,
+    //  which verifies the Cloudflare Turnstile token (if configured), checks
+    //  tenant + active-only slot count, and creates the auth user with
+    //  raw_app_meta_data.status='pending' so Week-1 RLS policies recognize
+    //  the JWT immediately. Direct supabase.auth.signUp is no longer used.
+    if (_isTurnstileConfigured() && !_turnstileToken) {
+      showMsg('registerMsg', '❌ Please complete the CAPTCHA before submitting.');
+      btn.disabled = false; btn.textContent = 'Create Account →';
+      return;
+    }
+
+    var fnUrl = SUPABASE_URL + '/functions/v1/register-rep';
+    var fnRes;
     try {
-      if (currentTenant) {
-        var countRes = await sb.rpc('tenant_active_rep_count', { p_tenant_id: currentTenant.id });
-        if (countRes.error) {
-          showMsg('registerMsg', '❌ Unable to verify registration slots. Please try again in a moment or contact your administrator.');
-          btn.disabled = false; btn.textContent = 'Create Account →';
-          return;
-        }
-        var currentCount = countRes.data || 0;
-        if (currentCount >= MAX_REPS) {
-          showMsg('registerMsg', '❌ Registration is closed. This team has reached its maximum of ' + MAX_REPS + ' active rep' + (MAX_REPS === 1 ? '' : 's') + '. Please contact your administrator to add more seats.');
-          btn.disabled = false; btn.textContent = 'Create Account →';
-          return;
-        }
-      }
-    } catch (ce) {
-      console.error('Slot count check failed:', ce.message);
-      showMsg('registerMsg', '❌ Registration check failed. Please refresh and try again, or contact your administrator.');
+      fnRes = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+          'apikey': SUPABASE_ANON
+        },
+        body: JSON.stringify({
+          email: email,
+          password: pass,
+          full_name: name,
+          phone_number: phone,
+          team_code: teamCode,
+          turnstile_token: _turnstileToken || null
+        })
+      });
+    } catch (netErr) {
+      _resetTurnstile();
+      showMsg('registerMsg', '❌ Network error — please check your connection and try again.');
       btn.disabled = false; btn.textContent = 'Create Account →';
       return;
     }
 
-    // New flow: reps register as 'pending'. Manager must approve before login.
-    // If a previously-rejected row exists for this email, we re-flip it to 'pending'
-    // (handled by the upsert below, since user_profiles.id is keyed off auth.users.id).
-    var res = await sb.auth.signUp({
-      email: email,
-      password: pass,
-      options: { data: { full_name: name, phone_number: phone, status: 'pending' } }
-    });
+    var payload = {};
+    try { payload = await fnRes.json(); } catch (e) { /* non-JSON body */ }
 
-    if (res.error && res.error.message && res.error.message.toLowerCase().includes('already')) {
-      // Existing user — could be a rejected/pending one trying to re-register.
-      // Try to log in to get their id, then re-set their profile to 'pending'.
-      var reLogin = await sb.auth.signInWithPassword({ email: email, password: pass });
-      if (!reLogin.error && reLogin.data && reLogin.data.user) {
-        var reuid = reLogin.data.user.id;
-        try {
-          await sb.from('user_profiles').upsert({
-            id: reuid, full_name: name, email: email,
-            phone_number: phone, status: 'pending',
-            tenant_id: currentTenant ? currentTenant.id : null
-          }, { onConflict: 'id' });
-        } catch (pe) { console.warn('profile upsert (re-register):', pe); }
-        await sb.auth.signOut();
-        currentUser = null;
-        showPendingApprovalScreen();
-        return;
-      }
-      showMsg('registerMsg', '❌ Email already registered. Please login instead.');
+    if (!fnRes.ok) {
+      _resetTurnstile();
+      showMsg('registerMsg', '❌ ' + (payload.error || 'Registration failed — please try again.'));
       btn.disabled = false; btn.textContent = 'Create Account →';
       return;
     }
 
-    if (res.error) throw res.error;
-
-    var user = res.data && res.data.user;
-
-    // Persist profile row as pending (works whether or not a session was returned)
-    if (user) {
-      try {
-        await sb.from('user_profiles').upsert({
-          id: user.id, full_name: name, email: email,
-          phone_number: phone, status: 'pending',
-          tenant_id: currentTenant ? currentTenant.id : null
-        }, { onConflict: 'id' });
-      } catch (pe) { console.warn('profile upsert:', pe); }
-    }
-
-    // Don't auto-login a pending rep — sign out any session that signUp may have created
-    try { await sb.auth.signOut(); } catch (e) { /* best effort */ }
+    // Success — show pending-approval message and reset the form
     currentUser = null;
     showPendingApprovalScreen();
+    _resetTurnstile();
     return;
 
   } catch (e) {
@@ -1048,10 +1082,15 @@ window.loadUsers = async function () {
   document.getElementById('usersTable').style.display = 'none';
   try {
     var sb = _sb;
-    var query = sb.from('user_profiles').select('*').order('created_at', { ascending: false });
-    // Multi-tenant: filter by tenant
-    if (currentTenant) query = query.eq('tenant_id', currentTenant.id);
-    var res = await query;
+    if (!currentTenant) throw new Error('No tenant loaded');
+    if (!_currentAdminHash) throw new Error('Admin session expired — please log in again');
+    // Week-1 hardening: user_profiles SELECT now requires an active Supabase
+    //  session. Admin sessions don't carry one, so reads go through the
+    //  tenant_admin_list_reps SECURITY DEFINER RPC (admin-hash gated).
+    var res = await sb.rpc('tenant_admin_list_reps', {
+      p_admin_hash: _currentAdminHash,
+      p_tenant_id: currentTenant.id
+    });
     if (res.error) throw res.error;
     var data = res.data;
     if (!data || data.length === 0) {

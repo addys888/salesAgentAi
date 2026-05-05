@@ -13,6 +13,12 @@
 
 <!-- Styles -->
 <link rel="stylesheet" href="styles.css">
+
+<!-- Cloudflare Turnstile (CAPTCHA on rep registration). Loaded async so it
+     never blocks the rest of the app. The widget only renders if a real site
+     key is configured in auth.js — otherwise registration falls back to
+     non-CAPTCHA mode. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileReady" async defer></script>
 </head>
 <body>
 
@@ -109,6 +115,9 @@
           <label>🏢 Team Code <span style="color:var(--muted);font-weight:400;font-size:10px">(provided by your manager)</span></label>
           <input type="text" class="field-input" id="regTeamCode" placeholder="e.g. XYZ2026" style="text-transform:uppercase">
         </div>
+        <!-- Cloudflare Turnstile widget. Rendered programmatically by auth.js
+             when TURNSTILE_SITE_KEY is configured. Hidden by default. -->
+        <div id="turnstileWidget" style="margin:0 0 14px;display:none"></div>
         <button class="auth-btn green" onclick="userRegister()" id="registerBtn">Create Account →</button>
         <div class="auth-msg" id="registerMsg"></div>
         <div class="terms">By registering you agree to use this tool only for authorised sales activities</div>
