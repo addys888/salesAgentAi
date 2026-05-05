@@ -98,11 +98,12 @@ Run migrations in this order on a fresh Supabase project:
 1. `migration_multi_tenant.sql` — creates `tenants`, adds `tenant_id` to `user_profiles`/`call_sessions`/`daily_stats`/`callbacks`, RLS policies, indexes.
 2. `add_team_codes.sql` — `tenants.team_code` (unique).
 3. `add_subscription_column.sql` — `tenants.subscription_end DATE`.
-4. `fix_tenant_rls.sql` — adds INSERT/UPDATE policies on `tenants` so the Super Admin panel can write.
+4. `fix_tenant_rls.sql` — adds INSERT/UPDATE policies on `tenants` (⚠️ **superseded by step 9 — those policies are revoked**).
 5. `migration_leads.sql` — creates `leads` table, adds `tenants.webhook_secret`.
 6. `migration_leads_fix_fk.sql` — repoints `leads.assigned_to` FK to `user_profiles(id)` so PostgREST embed works.
 7. `migration_leads_cost_optimize.sql` — drops the unused `raw_data` JSONB column.
 8. `migration_specialty.sql` — adds `user_profiles.specialty` (free-text) and `leads.specialty` for skill-based routing.
+9. **`migration_security_week0.sql`** — Week-0 hardening (see [docs/SECURITY_WEEK0.md](../../../docs/SECURITY_WEEK0.md)). Creates `platform_secrets`, `public_tenants` view, and `SECURITY DEFINER` RPCs (`verify_tenant_admin`, `verify_super_admin`, `super_admin_*`, `tenant_admin_*`, `tenant_active_rep_count`). Revokes anon read/write on `tenants` and tightens `user_profiles` UPDATE.
 
 ### Tables
 
@@ -178,11 +179,11 @@ Team codes must be uppercase, unique, and the tenant `is_active = true`.
 | Constant | Where | Notes |
 |----------|-------|-------|
 | `SUPABASE_URL` | `auth.js:77` | Anon key on next line — committed by design (RLS protects everything) |
-| `CELERAPPS_SUPER_HASH` | `auth.js:1796` | Platform admin master password hash. Rotate by computing a new SHA-256 and pasting here |
-| `CELERAPPS_SUPER_EMAIL` | `auth.js:1799` | OTP destination for platform admin 2FA |
+| Platform super-admin hash | `platform_secrets` table (key `celerapps_super_hash`) | Server-side after Week 0. Rotate via `UPDATE platform_secrets SET value = '<sha256>' WHERE key = 'celerapps_super_hash'` |
+| `CELERAPPS_SUPER_EMAIL` | `auth.js` | OTP destination for platform admin 2FA |
 | `AI_PROXY_URL` | `dialer.js:1072` | Cloudflare Worker proxying Anthropic/Claude calls — keeps API key off the client |
 | `EMAILJS_*` | `dialer.js:1191-1193` | Currently placeholders — falls back to `mailto:` if not set |
-| `SUPER_TRUST_DAYS = 7` | `auth.js:1800` | How long "trust this device" persists for platform admin |
+| `SUPER_TRUST_DAYS` | `auth.js` | How long "trust this device" persists for platform admin |
 
 ## Sales / go-to-market context
 
@@ -194,6 +195,18 @@ The product is live; **as of the last update there were no paying clients yet** 
 - [DEMO_FLOW.md](../../../branding/dialkaro/campaign/DEMO_FLOW.md) — 15-min live demo structure with timing and objection handling
 - [PRICING_PLAYBOOK.md](../../../branding/dialkaro/campaign/PRICING_PLAYBOOK.md) — Starter ₹2,499 / Growth ₹4,999 / Scale ₹9,999 / Enterprise custom; 14-day free trial; early-adopter ₹1,999 lifetime lock
 - [WHATSAPP_SEQUENCES.md](../../../branding/dialkaro/campaign/WHATSAPP_SEQUENCES.md) — drip sequences per ICP segment
+
+## Week-0 hardening invariants (don't regress)
+
+After [migration_security_week0.sql](../../../supabase/migration_security_week0.sql) is applied, these patterns must be preserved on every edit:
+
+1. **Never read from `tenants` directly from the browser** — anon/authenticated have no SELECT on it. Use `public_tenants` for safe columns, or call a `SECURITY DEFINER` RPC.
+2. **Never write to `tenants` directly from the browser** — use `super_admin_create_tenant` / `super_admin_update_tenant` (super-hash gated).
+3. **Never UPDATE `user_profiles` for someone else's row directly** — RLS only allows `id = auth.uid()`. Admin actions go through `tenant_admin_update_rep_status` / `tenant_admin_set_rep_specialty` / `tenant_admin_set_rep_subscription`.
+4. **Slot counting filters `status='active'`** — both `userRegister` and `saveMaxReps` use `tenant_active_rep_count(tenant_id)` RPC. Don't switch back to `count(*) where tenant_id = X` (would re-introduce H1: pending registrations DoS the team code).
+5. **`_currentAdminHash` / `_currentSuperHash` are the auth tokens** — populated after `verify_tenant_admin` / `verify_super_admin` RPCs succeed. Cleared on logout and 30-min idle. Pass them to every admin RPC so the server can prove the caller is authorized.
+6. **`webhook_secret` is no longer in the public_tenants view** — fetch via `tenant_admin_get_webhook_secret(tenant_id, admin_hash)` RPC. The `currentTenant.webhook_secret` JS field is populated lazily by `loadAdminLeads`.
+7. **Platform super-admin password lives in `platform_secrets`** — not in JS. Verified via `verify_super_admin(hash)` RPC, rotated via SQL `UPDATE`.
 
 ## Things that will bite you
 

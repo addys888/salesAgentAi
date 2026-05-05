@@ -77,11 +77,15 @@ function applyAppConfig() {
 const SUPABASE_URL = 'https://dxxrcnsfmuqbgaixsbig.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eHJjbnNmbXVxYmdhaXhzYmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NzAwMzUsImV4cCI6MjA4ODQ0NjAzNX0.F7CbBP0bG7UgVVR26czCvhl4L9eFCswv99sQ7SG1C10';
 const ADMIN_USER = 'admin';
-// ── Hashed credentials (SHA-256) — defaults, overridden by tenant config ──
-var ADMIN_HASH = '4512f5c7a37aa142b97bde9f8b2d8a1382d5118e1e87ffdf035d3bfaeb6b8e29';
-var SUPER_HASH = '18c6a08bbf0b4a16a736238b3fee6d6330c778041f436cf22c2f61e729a81c39';
+// Default rep cap — overridden once a tenant is loaded
 var MAX_REPS = 10;
 var isSuperAdmin = false;
+
+// ── Week-0 hardening: hashes of the password the admin/super admin typed ──
+//  Stored in-memory only so subsequent admin RPCs can prove they hold the password.
+//  Cleared on logout. Never persisted.
+var _currentAdminHash = null;   // set by adminLogin() after verify_tenant_admin RPC
+var _currentSuperHash = null;   // set by superAdminLogin() after verify_super_admin RPC
 
 // ════════════════════════════════════════════════════════
 //  MULTI-TENANT: Current tenant state
@@ -107,6 +111,7 @@ function resetAdminIdleTimer() {
     if (isAdminSession) {
       isAdminSession = false;
       isSuperAdmin = false;
+      _currentAdminHash = null; // Week-0 hardening: drop cached hash on idle timeout
       document.getElementById('adminPanel').style.display = 'none';
       document.getElementById('landingScreen').style.display = 'flex';
       showToast('🔒 Admin session timed out (30 min idle)', true);
@@ -169,25 +174,23 @@ async function loadTenantConfig() {
     var isLocal = (hostname === 'localhost' || hostname === '127.0.0.1');
     var isGitHub = hostname.endsWith('.github.io');
 
+    // Week-0 hardening: read from public_tenants view (hashes/secrets hidden).
     var res;
     if (isLocal || isGitHub) {
-      // Load default tenant for dev/demo
-      res = await _sb.from('tenants')
+      res = await _sb.from('public_tenants')
         .select('*')
         .eq('slug', 'dialkaro')
         .eq('is_active', true)
         .single();
     } else {
-      // Production: match by hostname
-      res = await _sb.from('tenants')
+      res = await _sb.from('public_tenants')
         .select('*')
         .eq('hostname', hostname)
         .eq('is_active', true)
         .single();
       if (res.error || !res.data) {
-        // Fallback: try slug from first part of hostname (e.g. 'dialkaro' from 'dialkaro.celerapps.com')
         var slugGuess = hostname.split('.')[0];
-        var res2 = await _sb.from('tenants')
+        var res2 = await _sb.from('public_tenants')
           .select('*')
           .eq('slug', slugGuess)
           .eq('is_active', true)
@@ -204,9 +207,6 @@ async function loadTenantConfig() {
     }
 
     currentTenant = res.data;
-    // Apply tenant overrides
-    ADMIN_HASH = res.data.admin_hash || ADMIN_HASH;
-    SUPER_HASH = res.data.super_hash || SUPER_HASH;
     MAX_REPS = res.data.max_reps || MAX_REPS;
     // Apply branding
     if (res.data.app_name) {
@@ -362,7 +362,8 @@ window.addEventListener('DOMContentLoaded', async function () {
           // C-3 FIX: Check tenant-level subscription on auto-login
           if (p.tenant_id) {
             try {
-              var tenRes = await _sb.from('tenants').select('subscription_end, is_active').eq('id', p.tenant_id).single();
+              // Week-0 hardening: read via public_tenants (no secrets exposed)
+              var tenRes = await _sb.from('public_tenants').select('subscription_end, is_active').eq('id', p.tenant_id).single();
               if (!tenRes.error && tenRes.data) {
                 if (!tenRes.data.is_active) {
                   await _sb.auth.signOut();
@@ -502,9 +503,10 @@ window.userRegister = async function () {
     var sb = _sb;
     if (!sb) throw new Error('Auth service not ready. Please refresh and try again.');
 
-    // Validate team code and switch to correct tenant
+    // Validate team code and switch to correct tenant.
+    // Week-0 hardening: read from public_tenants (no hashes/secrets exposed).
     try {
-      var tcRes = await sb.from('tenants')
+      var tcRes = await sb.from('public_tenants')
         .select('*')
         .eq('team_code', teamCode)
         .eq('is_active', true)
@@ -516,8 +518,6 @@ window.userRegister = async function () {
       }
       // Switch to the matched tenant
       currentTenant = tcRes.data;
-      ADMIN_HASH = tcRes.data.admin_hash || ADMIN_HASH;
-      SUPER_HASH = tcRes.data.super_hash || SUPER_HASH;
       MAX_REPS = tcRes.data.max_reps || MAX_REPS;
       // Apply tenant branding immediately
       if (tcRes.data.app_name) {
@@ -547,23 +547,23 @@ window.userRegister = async function () {
     btn.textContent = '⏳ Creating...';
     await loadMaxReps();
 
-    var slotCheckPassed = false;
+    // H1 fix: slot check counts ACTIVE reps only — pending registrations no
+    //  longer block real reps. Uses tenant_active_rep_count() RPC.
     try {
-      var countQuery = sb.from('user_profiles').select('id', { count: 'exact', head: true });
-      if (currentTenant) countQuery = countQuery.eq('tenant_id', currentTenant.id);
-      var countRes = await countQuery;
-      if (countRes.error) {
-        showMsg('registerMsg', '❌ Unable to verify registration slots. Please try again in a moment or contact your administrator.');
-        btn.disabled = false; btn.textContent = 'Create Account →';
-        return;
+      if (currentTenant) {
+        var countRes = await sb.rpc('tenant_active_rep_count', { p_tenant_id: currentTenant.id });
+        if (countRes.error) {
+          showMsg('registerMsg', '❌ Unable to verify registration slots. Please try again in a moment or contact your administrator.');
+          btn.disabled = false; btn.textContent = 'Create Account →';
+          return;
+        }
+        var currentCount = countRes.data || 0;
+        if (currentCount >= MAX_REPS) {
+          showMsg('registerMsg', '❌ Registration is closed. This team has reached its maximum of ' + MAX_REPS + ' active rep' + (MAX_REPS === 1 ? '' : 's') + '. Please contact your administrator to add more seats.');
+          btn.disabled = false; btn.textContent = 'Create Account →';
+          return;
+        }
       }
-      var currentCount = countRes.count || 0;
-      if (currentCount >= MAX_REPS) {
-        showMsg('registerMsg', '❌ Registration is closed. This team has reached its maximum of ' + MAX_REPS + ' rep' + (MAX_REPS === 1 ? '' : 's') + '. Please contact your administrator to add more seats.');
-        btn.disabled = false; btn.textContent = 'Create Account →';
-        return;
-      }
-      slotCheckPassed = true;
     } catch (ce) {
       console.error('Slot count check failed:', ce.message);
       showMsg('registerMsg', '❌ Registration check failed. Please refresh and try again, or contact your administrator.');
@@ -819,15 +819,13 @@ async function loadUserTenant() {
     if (profRes.error || !profRes.data || !profRes.data.tenant_id) return;
     // If we already have the right tenant loaded, skip
     if (currentTenant && currentTenant.id === profRes.data.tenant_id) return;
-    // Load the tenant
-    var tenRes = await _sb.from('tenants')
+    // Load the tenant from public_tenants (Week-0 hardening: no hashes/secrets exposed)
+    var tenRes = await _sb.from('public_tenants')
       .select('*')
       .eq('id', profRes.data.tenant_id)
       .single();
     if (tenRes.error || !tenRes.data) return;
     currentTenant = tenRes.data;
-    ADMIN_HASH = tenRes.data.admin_hash || ADMIN_HASH;
-    SUPER_HASH = tenRes.data.super_hash || SUPER_HASH;
     MAX_REPS = tenRes.data.max_reps || MAX_REPS;
     if (tenRes.data.app_name) {
       APP_CONFIG.appName = tenRes.data.app_name;
@@ -944,36 +942,34 @@ window.adminLogin = async function () {
 
   try {
     var hash = await sha256(p);
-    // Multi-tenant: validate username + password hash against the tenant.
-    // Username is now configurable per tenant (column: tenants.admin_username).
+    // Week-0 hardening: hash verification happens server-side via
+    //  verify_tenant_admin RPC. The DB never returns admin_hash / super_hash
+    //  to the browser. The typed-password hash is kept in _currentAdminHash
+    //  so subsequent admin RPCs can prove authorization.
     var validAdmin = false;
     var validSuper = false;
 
-    // If a tenant is already loaded, validate username + hash against it
-    if (currentTenant && u === (currentTenant.admin_username || 'admin')) {
-      validAdmin = (hash === ADMIN_HASH);
-      validSuper = (hash === SUPER_HASH);
-    }
-
-    // If not validated yet, look up tenant by (username + hash) combo
-    if (!validAdmin && !validSuper && _sb) {
+    if (_sb) {
       try {
-        var tenantRes = await _sb.from('tenants')
-          .select('*')
-          .eq('admin_username', u)
-          .eq('is_active', true)
-          .or('admin_hash.eq.' + hash + ',super_hash.eq.' + hash)
-          .limit(1);
-        if (!tenantRes.error && tenantRes.data && tenantRes.data.length > 0) {
-          var t = tenantRes.data[0];
-          currentTenant = t;
-          ADMIN_HASH = t.admin_hash;
-          SUPER_HASH = t.super_hash;
+        var verifyRes = await _sb.rpc('verify_tenant_admin', {
+          p_username: u,
+          p_hash: hash
+        });
+        if (!verifyRes.error && verifyRes.data && verifyRes.data.length > 0) {
+          var t = verifyRes.data[0];
+          // RPC returns full tenant fields + is_super flag (no hashes leaked)
+          currentTenant = {
+            id: t.id, slug: t.slug, hostname: t.hostname,
+            app_name: t.app_name, app_subtitle: t.app_subtitle, app_emoji: t.app_emoji,
+            landing_title: t.landing_title, landing_tagline: t.landing_tagline,
+            primary_color: t.primary_color, admin_username: t.admin_username,
+            max_reps: t.max_reps, subscription_end: t.subscription_end,
+            is_active: t.is_active, team_code: t.team_code
+          };
           MAX_REPS = t.max_reps || 10;
-          validAdmin = (hash === t.admin_hash);
-          validSuper = (hash === t.super_hash);
-          // Apply tenant branding (must include dialerTitle & adminDashTitle —
-          // these drive the dialer header and "<Tenant> Console" admin header)
+          validSuper = !!t.is_super;
+          validAdmin = !validSuper;
+          // Apply tenant branding (drives dialer header + "<Tenant> Console")
           APP_CONFIG.appName = t.app_name || APP_CONFIG.appName;
           APP_CONFIG.dialerTitle = t.app_name || APP_CONFIG.dialerTitle;
           APP_CONFIG.adminDashTitle = (t.app_name || APP_CONFIG.appName) + ' Console';
@@ -983,10 +979,13 @@ window.adminLogin = async function () {
           APP_CONFIG.landingTagline = t.landing_tagline || APP_CONFIG.landingTagline;
           applyAppConfig();
         }
-      } catch (te) { console.warn('Tenant lookup:', te.message); }
+      } catch (te) { console.warn('Tenant admin verify:', te.message); }
     }
 
     if (validAdmin || validSuper) {
+      // Stash the typed-password hash for the duration of this admin session.
+      // Cleared in adminLogout(). Used by tenant-admin RPCs to prove auth.
+      _currentAdminHash = hash;
       // Check tenant subscription before allowing access
       var subCheck = checkTenantSubscription(currentTenant);
       if (subCheck.blocked) {
@@ -1030,6 +1029,7 @@ window.adminLogin = async function () {
 window.adminLogout = function () {
   isAdminSession = false;
   isSuperAdmin = false;
+  _currentAdminHash = null; // Week-0 hardening: drop the cached password hash
   clearTimeout(_adminSessionTimer);
   clearInterval(window._subTimer); // Clear subscription timer
   var panel = document.getElementById('adminPanel');
@@ -1057,12 +1057,14 @@ window.loadUsers = async function () {
     if (!data || data.length === 0) {
       document.getElementById('usersLoading').style.display = 'none';
       document.getElementById('usersEmpty').style.display = 'block';
-      updateAdminStats(0, 0, 0, 0); return;
+      updateAdminStats(0, 0, 0, 0, 0); return;
     }
     var active = data.filter(function (u) { return u.status === 'active'; }).length;
     var suspended = data.filter(function (u) { return u.status === 'suspended'; }).length;
     var pending = data.filter(function (u) { return u.status === 'pending'; }).length;
-    updateAdminStats(data.length, active, suspended, pending);
+    // H1 fix: slot count uses ACTIVE reps only — pending registrations no longer
+    //  consume slots (matching the registration-time check in userRegister).
+    updateAdminStats(data.length, active, suspended, pending, active);
 
     // Sort: pending first (loudest), then active, then suspended/rejected
     var sortRank = { pending: 0, active: 1, suspended: 2, rejected: 3 };
@@ -1250,7 +1252,7 @@ window.loadUsers = async function () {
   }
 };
 
-function updateAdminStats(total, active, suspended, pending) {
+function updateAdminStats(total, active, suspended, pending, slotsUsed) {
   document.getElementById('aStatTotal').textContent = total;
   document.getElementById('aStatActive').textContent = active;
   document.getElementById('aStatSuspended').textContent = suspended;
@@ -1259,7 +1261,9 @@ function updateAdminStats(total, active, suspended, pending) {
   var slotMaxEl = document.getElementById('aStatSlotsMax');
   var slotCard = document.getElementById('aStatSlotsCard');
   if (!slotsEl) return;
-  var used = total;
+  // H1 fix: slot usage tracks ACTIVE reps. Caller may pass slotsUsed; default
+  //  to total for backward compatibility if not supplied.
+  var used = (typeof slotsUsed === 'number') ? slotsUsed : total;
   slotsEl.textContent = used;
   var pct = MAX_REPS > 0 ? (used / MAX_REPS) : 1;
   if (pct >= 1) {
@@ -1311,52 +1315,47 @@ async function loadMaxReps() {
 
 window.saveMaxReps = async function () {
   if (!isSuperAdmin) return;
+  if (!_currentAdminHash) { showToast('❌ Admin session expired — please log in again', true); return; }
   var inp = document.getElementById('maxRepsInput');
   var val = parseInt(inp && inp.value);
   if (!val || val < 1) return showToast('❌ Enter a valid number');
 
+  // H1 fix: count ACTIVE reps only when warning about over-cap.
   try {
-    var countQuery = _sb.from('user_profiles').select('id', { count: 'exact', head: true });
-    if (currentTenant) countQuery = countQuery.eq('tenant_id', currentTenant.id);
-    var countRes = await countQuery;
-    var currentCount = countRes.count || 0;
-    if (val < currentCount) {
-      var proceed = await appConfirm('⚠️ You have ' + currentCount + ' registered reps but are setting limit to ' + val + '. New registrations will be blocked. Continue?', '⚠️');
-      if (!proceed) return;
+    if (currentTenant) {
+      var countRes = await _sb.rpc('tenant_active_rep_count', { p_tenant_id: currentTenant.id });
+      var currentCount = (!countRes.error && countRes.data) || 0;
+      if (val < currentCount) {
+        var proceed = await appConfirm('⚠️ You have ' + currentCount + ' active reps but are setting limit to ' + val + '. New registrations will be blocked. Continue?', '⚠️');
+        if (!proceed) return;
+      }
     }
   } catch (ce) { }
 
-  // M-1 FIX: Save to tenant's max_reps column if tenant is loaded
-  var savedToCloud = false;
+  // Week-0 hardening: max_reps update goes through tenant_admin_set_max_reps
+  // RPC (super-hash gated). Direct UPDATE on tenants is no longer allowed.
   if (currentTenant && _sb) {
     try {
-      var res = await _sb.from('tenants').update({ max_reps: val }).eq('id', currentTenant.id);
-      if (!res.error) {
-        savedToCloud = true;
-        currentTenant.max_reps = val; // Update local cache
+      var res = await _sb.rpc('tenant_admin_set_max_reps', {
+        p_admin_hash: _currentAdminHash,
+        p_tenant_id: currentTenant.id,
+        p_max_reps: val
+      });
+      if (res.error) throw res.error;
+      currentTenant.max_reps = val;
+      MAX_REPS = val;
+      try { localStorage.setItem('max_reps_override', String(val)); } catch (le) { }
+      showToast('✅ Rep limit saved to ' + val);
+      loadUsers();
+    } catch (e) {
+      var msg = (e && e.message) || '';
+      if (msg.indexOf('unauthorized') >= 0) {
+        showToast('🔒 Only Super Admin can change the rep limit', true);
+      } else {
+        showToast('❌ Failed to save rep limit: ' + msg, true);
       }
-    } catch (e) { }
+    }
   }
-  // Fallback: save to app_config for non-tenant mode
-  if (!savedToCloud && _sb) {
-    try {
-      var res2 = await _sb.from('app_config').upsert(
-        { key: 'max_reps', value: String(val) },
-        { onConflict: 'key' }
-      );
-      if (!res2.error) savedToCloud = true;
-    } catch (e) { }
-  }
-
-  try { localStorage.setItem('max_reps_override', String(val)); } catch (le) { }
-  MAX_REPS = val;
-
-  if (savedToCloud) {
-    showToast('✅ Rep limit saved to ' + val + ' (synced to cloud)');
-  } else {
-    showToast('✅ Rep limit set to ' + val + ' (saved locally)');
-  }
-  loadUsers();
 };
 
 // ════════════════════════════════════════════════════════
@@ -1375,69 +1374,100 @@ window.adminResetPw = async function (email) {
   } catch (e) { await appAlert('❌ Failed: ' + e.message, '❌'); }
 };
 
+// Week-0 hardening helper: ensure we hold a valid admin hash before mutating.
+function _requireAdminHash() {
+  if (!_currentAdminHash) {
+    appAlert('Admin session expired — please log in again.', '🔒');
+    return false;
+  }
+  return true;
+}
+
+function _explainRpcError(e, fallback) {
+  var msg = (e && e.message) || '';
+  if (msg.indexOf('unauthorized') >= 0) return '🔒 Not authorised — your admin session may have expired';
+  return fallback + (msg ? ': ' + msg : '');
+}
+
 window.adminSetSpecialty = async function (userId, value, inputEl) {
+  if (!_requireAdminHash()) return;
   try {
-    var res = await _sb.from('user_profiles')
-      .update({ specialty: value || null })
-      .eq('id', userId);
+    var res = await _sb.rpc('tenant_admin_set_rep_specialty', {
+      p_admin_hash: _currentAdminHash,
+      p_rep_id: userId,
+      p_specialty: value || ''
+    });
     if (res.error) throw res.error;
     if (inputEl) inputEl.dataset.original = value;
     showToast(value ? '✅ Specialty set: ' + value : '✅ Specialty cleared');
   } catch (e) {
     if (inputEl) inputEl.value = inputEl.dataset.original || '';
-    await appAlert('Failed to update specialty: ' + e.message, '❌');
+    await appAlert(_explainRpcError(e, 'Failed to update specialty'), '❌');
   }
 };
 
 window.adminToggleStatus = async function (userId, newStatus) {
+  if (!_requireAdminHash()) return;
   try {
-    var sb = _sb;
-    var res = await sb.from('user_profiles').update({ status: newStatus }).eq('id', userId);
+    var res = await _sb.rpc('tenant_admin_update_rep_status', {
+      p_admin_hash: _currentAdminHash,
+      p_rep_id: userId,
+      p_new_status: newStatus
+    });
     if (res.error) throw res.error;
     window.loadUsers();
-  } catch (e) { await appAlert('Failed: ' + e.message, '❌'); }
+  } catch (e) { await appAlert(_explainRpcError(e, 'Failed'), '❌'); }
 };
 
 window.adminApproveRep = async function (userId, label) {
+  if (!_requireAdminHash()) return;
   var ok = await appConfirm('Approve ' + (label || 'this rep') + '? They will be able to log in.', '✅');
   if (!ok) return;
   try {
-    var res = await _sb.from('user_profiles').update({ status: 'active' }).eq('id', userId);
+    var res = await _sb.rpc('tenant_admin_update_rep_status', {
+      p_admin_hash: _currentAdminHash,
+      p_rep_id: userId,
+      p_new_status: 'active'
+    });
     if (res.error) throw res.error;
     showToast('✅ ' + (label || 'Rep') + ' approved');
     window.loadUsers();
-  } catch (e) { await appAlert('Failed: ' + e.message, '❌'); }
+  } catch (e) { await appAlert(_explainRpcError(e, 'Failed'), '❌'); }
 };
 
 window.adminRejectRep = async function (userId, label) {
+  if (!_requireAdminHash()) return;
   var ok = await appConfirm('Reject registration for ' + (label || 'this rep') + '? They will not be able to log in.', '❌');
   if (!ok) return;
   try {
-    var res = await _sb.from('user_profiles').update({ status: 'rejected' }).eq('id', userId);
+    var res = await _sb.rpc('tenant_admin_update_rep_status', {
+      p_admin_hash: _currentAdminHash,
+      p_rep_id: userId,
+      p_new_status: 'rejected'
+    });
     if (res.error) throw res.error;
     showToast('❌ ' + (label || 'Rep') + ' rejected');
     window.loadUsers();
-  } catch (e) { await appAlert('Failed: ' + e.message, '❌'); }
+  } catch (e) { await appAlert(_explainRpcError(e, 'Failed'), '❌'); }
 };
 
 window.adminSetSubscription = async function (userId, dateValue) {
   if (!isSuperAdmin) { await appAlert('⛔ Only Super Admin can change subscription dates.', '⛔'); return; }
+  if (!_requireAdminHash()) return;
   if (!dateValue) return;
   try {
-    var sb = _sb;
-    var updateData = { subscription_end: dateValue };
-    var profRes = await sb.from('user_profiles').select('status').eq('id', userId).single();
-    if (!profRes.error && profRes.data && profRes.data.status === 'suspended') {
-      updateData.status = 'active';
-    }
-    var res = await sb.from('user_profiles').update(updateData).eq('id', userId);
+    var res = await _sb.rpc('tenant_admin_set_rep_subscription', {
+      p_admin_hash: _currentAdminHash,
+      p_rep_id: userId,
+      p_sub_end: dateValue
+    });
     if (res.error) throw res.error;
     var endDate = new Date(dateValue);
     var now3 = new Date(); now3.setHours(0, 0, 0, 0);
     var daysSet = Math.round((endDate - now3) / (1000 * 60 * 60 * 24));
-    await appAlert('Subscription set to ' + endDate.toLocaleDateString('en-IN') + ' (' + daysSet + ' days).' + (updateData.status === 'active' ? ' User re-activated.' : ''), '📅');
+    await appAlert('Subscription set to ' + endDate.toLocaleDateString('en-IN') + ' (' + daysSet + ' days). Suspended users are re-activated automatically.', '📅');
     window.loadUsers();
-  } catch (e) { await appAlert('Failed to set subscription: ' + e.message, '❌'); }
+  } catch (e) { await appAlert(_explainRpcError(e, 'Failed to set subscription'), '❌'); }
 };
 
 // ════════════════════════════════════════════════════════
@@ -1792,8 +1822,11 @@ window.loadLeaderboard = async function (days) {
 //  CELERAPPS SUPER ADMIN PANEL
 // ════════════════════════════════════════════════════════
 
-// Default SUPER_HASH (hardcoded in auth.js line 61) is the CelerApps master key
-var CELERAPPS_SUPER_HASH = '87859159d3dcdf468afe630139ba14d72603a795a085c25ca60c1ad6c3c154b7';
+// Week-0 hardening: the CelerApps master hash now lives in
+//   platform_secrets (key = 'celerapps_super_hash')
+// and is verified server-side via the verify_super_admin RPC.
+// Rotate by updating platform_secrets in Supabase SQL editor.
+// (The previous hardcoded constant is intentionally removed from JS.)
 
 // 2FA — Email OTP (Supabase Auth) for Super Admin
 var CELERAPPS_SUPER_EMAIL = 'hello@celerapps.com';
@@ -1866,8 +1899,18 @@ window.superAdminLogin = async function () {
   }
   var pass = document.getElementById('superAdminPass').value;
   if (!pass) return showMsg('superAdminMsg', '❌ Enter the super admin password');
+
+  // Week-0 hardening: hash verification happens server-side via verify_super_admin
+  // RPC; the platform secret is no longer compared in JS. The typed-password hash
+  // is cached in _currentSuperHash for subsequent super-admin RPCs.
   var hash = await sha256(pass);
-  if (hash !== CELERAPPS_SUPER_HASH) {
+  var verified = false;
+  try {
+    var verifyRes = await _sb.rpc('verify_super_admin', { p_hash: hash });
+    verified = !verifyRes.error && verifyRes.data === true;
+  } catch (e) { console.warn('Super admin verify:', e.message); }
+
+  if (!verified) {
     _superAttempts++;
     var remaining = SUPER_MAX_ATTEMPTS - _superAttempts;
     if (_superAttempts >= SUPER_MAX_ATTEMPTS) {
@@ -1881,6 +1924,7 @@ window.superAdminLogin = async function () {
     return;
   }
   _superAttempts = 0;
+  _currentSuperHash = hash; // cached for super_admin_* RPCs
   document.getElementById('superAdminPass').value = '';
 
   // Step 2 — 2FA: skip OTP if device is trusted, otherwise send email OTP
@@ -2001,6 +2045,7 @@ window.superAdminBackToPassword = function () {
 };
 
 window.superAdminLogout = function () {
+  _currentSuperHash = null; // Week-0 hardening: drop the cached super-admin hash
   document.getElementById('superPanel').style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex'; // M-9 FIX: consistent with other logouts
 };
@@ -2018,8 +2063,15 @@ window.switchSuperTab = function (tab) {
 // ── Load All Tenants ──────────────────────────────────
 window.loadAllTenants = async function () {
   if (!_sb) return;
+  if (!_currentSuperHash) {
+    showToast('🔒 Super admin session expired — please log in again', true);
+    return;
+  }
   try {
-    var res = await _sb.from('tenants').select('*').order('created_at', { ascending: true });
+    // Week-0 hardening: tenants are no longer publicly readable. The super-admin
+    // RPC returns full rows (including hashes/secrets) only after verifying
+    // the cached super-hash against platform_secrets.
+    var res = await _sb.rpc('super_admin_list_tenants', { p_super_hash: _currentSuperHash });
     if (res.error) throw res.error;
     var tenants = res.data || [];
 
@@ -2243,10 +2295,19 @@ window.resetTenantAdminPassword = async function (tenantId, tenantLabel, adminUs
     return;
   }
 
-  // Step 4: hash + update
+  // Step 4: hash + update via super-admin RPC
+  if (!_currentSuperHash) {
+    await appAlert('Super admin session expired — please log in again.', '🔒');
+    return;
+  }
   try {
     var newHash = await sha256(newPass);
-    var res = await _sb.from('tenants').update({ admin_hash: newHash }).eq('id', tenantId);
+    var res = await _sb.rpc('super_admin_update_tenant', {
+      p_super_hash: _currentSuperHash,
+      p_tenant_id: tenantId,
+      p_field: 'admin_hash',
+      p_value: newHash
+    });
     if (res.error) throw res.error;
     showToast('✅ Admin password reset for ' + tenantLabel);
     await appAlert(
@@ -2264,13 +2325,21 @@ window.resetTenantAdminPassword = async function (tenantId, tenantLabel, adminUs
 // ── Toggle Tenant Active/Inactive ─────────────────────
 window.toggleTenantActive = async function (tenantId, newState) {
   if (!_sb) return;
-  var confirmMsg = newState ? 'Enable this tenant? Their reps will be able to login again.' : 'Disable this tenant? Their reps will NOT be able to login.';
+  if (!_currentSuperHash) { appAlert('Super admin session expired — please log in again.', '🔒'); return; }
+  // newState arrives as boolean OR the string 'true'/'false' (from dataset)
+  var stateBool = (newState === true || newState === 'true');
+  var confirmMsg = stateBool ? 'Enable this tenant? Their reps will be able to login again.' : 'Disable this tenant? Their reps will NOT be able to login.';
   var ok = await appConfirm(confirmMsg, '⚡');
   if (!ok) return;
   try {
-    var res = await _sb.from('tenants').update({ is_active: newState }).eq('id', tenantId);
+    var res = await _sb.rpc('super_admin_update_tenant', {
+      p_super_hash: _currentSuperHash,
+      p_tenant_id: tenantId,
+      p_field: 'is_active',
+      p_value: stateBool ? 'true' : 'false'
+    });
     if (res.error) throw res.error;
-    showToast(newState ? '✅ Tenant enabled' : '🚫 Tenant disabled');
+    showToast(stateBool ? '✅ Tenant enabled' : '🚫 Tenant disabled');
     loadAllTenants();
   } catch (e) {
     appAlert('Error: ' + e.message, '❌');
@@ -2280,16 +2349,23 @@ window.toggleTenantActive = async function (tenantId, newState) {
 // ── Update Any Tenant Field Inline ────────────────────
 window.updateTenantField = async function (tenantId, field, value) {
   if (!_sb) return;
+  if (!_currentSuperHash) { appAlert('Super admin session expired — please log in again.', '🔒'); loadAllTenants(); return; }
   try {
-    var update = {};
-    update[field] = value;
-    var res = await _sb.from('tenants').update(update).eq('id', tenantId);
+    var res = await _sb.rpc('super_admin_update_tenant', {
+      p_super_hash: _currentSuperHash,
+      p_tenant_id: tenantId,
+      p_field: field,
+      // Server-side fn parses the string into the right type per field (INT/DATE/BOOL/TEXT).
+      p_value: (value === null || value === undefined) ? '' : String(value)
+    });
     if (res.error) throw res.error;
     var labels = { team_code: 'Team Code', max_reps: 'Max Reps', subscription_end: 'Subscription', admin_username: 'Admin Username' };
     showToast('✅ ' + (labels[field] || field) + ' updated');
   } catch (e) {
-    if (e.message && e.message.includes('unique')) {
+    if (e.message && (e.message.includes('unique') || e.message.includes('duplicate'))) {
       appAlert('❌ That value is already in use by another tenant.', '❌');
+    } else if (e.message && e.message.indexOf('unauthorized') >= 0) {
+      appAlert('🔒 Super admin session expired — please log in again.', '🔒');
     } else {
       appAlert('❌ Update failed: ' + e.message, '❌');
     }
@@ -2316,6 +2392,11 @@ window.addNewTenant = async function () {
   if (!adminPass) return showMsg('addTenantMsg', '❌ Admin password is required');
   if (adminPass.length < 8) return showMsg('addTenantMsg', '❌ Admin password must be at least 8 characters');
 
+  if (!_currentSuperHash) {
+    showMsg('addTenantMsg', '🔒 Super admin session expired — please log in again.');
+    return;
+  }
+
   var btn = document.getElementById('addTenantBtn');
   btn.disabled = true; btn.textContent = '⏳ Creating...';
 
@@ -2326,32 +2407,37 @@ window.addNewTenant = async function () {
     // Hash admin password using browser crypto
     var adminHash = await sha256(adminPass);
     // Per-tenant super_hash is no longer set via the form. The platform Super Admin
-    // (CELERAPPS_SUPER_HASH) is global and unique. We generate a random unguessable
-    // value here purely to satisfy the NOT NULL DB constraint; nobody knows or uses it.
+    // hash lives in platform_secrets and is checked server-side. We generate a
+    // random unguessable value here purely to satisfy the NOT NULL DB constraint.
     var randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    var superHash = Array.from(randomBytes).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    var superHashLocal = Array.from(randomBytes).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
 
-    var res = await _sb.from('tenants').insert({
-      slug: slug,
-      hostname: 'dialkaro.celerapps.com',
-      app_name: name,
-      app_subtitle: subtitle || 'Powered by DialKaro',
-      app_emoji: emoji,
-      landing_title: name,
-      landing_tagline: tagline || 'Smart sales dialing for your team',
-      primary_color: color,
-      team_code: teamCode,
-      admin_username: adminUser,
-      admin_hash: adminHash,
-      super_hash: superHash,
-      max_reps: maxReps,
-      subscription_end: subEnd,
-      is_active: true
+    // Week-0 hardening: tenant insert goes through super_admin_create_tenant RPC.
+    var res = await _sb.rpc('super_admin_create_tenant', {
+      p_super_hash: _currentSuperHash,
+      p_slug: slug,
+      p_hostname: 'dialkaro.celerapps.com',
+      p_app_name: name,
+      p_app_subtitle: subtitle || 'Powered by DialKaro',
+      p_app_emoji: emoji,
+      p_landing_title: name,
+      p_landing_tagline: tagline || 'Smart sales dialing for your team',
+      p_primary_color: color,
+      p_team_code: teamCode,
+      p_admin_username: adminUser,
+      p_admin_hash: adminHash,
+      p_super_hash_local: superHashLocal,
+      p_max_reps: maxReps,
+      p_subscription_end: subEnd,
+      p_is_active: true
     });
 
     if (res.error) {
-      if (res.error.message.includes('duplicate') || res.error.message.includes('unique')) {
+      var errMsg = (res.error.message || '').toLowerCase();
+      if (errMsg.includes('duplicate') || errMsg.includes('unique')) {
         showMsg('addTenantMsg', '❌ Duplicate slug or team code. Use a different name or team code.');
+      } else if (errMsg.indexOf('unauthorized') >= 0) {
+        showMsg('addTenantMsg', '🔒 Super admin session expired — please log in again.');
       } else {
         showMsg('addTenantMsg', '❌ ' + res.error.message);
       }
@@ -2383,7 +2469,8 @@ window.loadGlobalStats = async function () {
   if (!_sb) return;
   try {
     // Get all tenants
-    var tRes = await _sb.from('tenants').select('id, app_name, app_emoji');
+    // Week-0 hardening: read via public_tenants (no secrets exposed)
+    var tRes = await _sb.from('public_tenants').select('id, app_name, app_emoji');
     if (tRes.error) throw tRes.error;
     var tenants = tRes.data || [];
 
@@ -2486,15 +2573,23 @@ window.loadAdminLeads = async function () {
     if (urlEl) urlEl.value = SUPABASE_URL + '/functions/v1/webhook-leads?tenant=' + (currentTenant.slug || 'default');
     if (secretEl) secretEl.value = currentTenant.webhook_secret || 'Loading...';
 
-    // Fetch webhook_secret if not already loaded
-    if (!currentTenant.webhook_secret) {
+    // Week-0 hardening: webhook_secret is no longer in the public_tenants view.
+    //  Fetch via tenant_admin_get_webhook_secret RPC (admin/super hash gated).
+    if (!currentTenant.webhook_secret && _currentAdminHash) {
       try {
-        var secRes = await _sb.from('tenants').select('webhook_secret').eq('id', currentTenant.id).single();
+        var secRes = await _sb.rpc('tenant_admin_get_webhook_secret', {
+          p_tenant_id: currentTenant.id,
+          p_admin_hash: _currentAdminHash
+        });
         if (!secRes.error && secRes.data) {
-          currentTenant.webhook_secret = secRes.data.webhook_secret;
-          if (secretEl) secretEl.value = secRes.data.webhook_secret;
+          currentTenant.webhook_secret = secRes.data;
+          if (secretEl) secretEl.value = secRes.data;
+        } else if (secretEl) {
+          secretEl.value = 'Unavailable — re-login as admin';
         }
-      } catch (e) { }
+      } catch (e) {
+        if (secretEl) secretEl.value = 'Unavailable — re-login as admin';
+      }
     }
   }
 
