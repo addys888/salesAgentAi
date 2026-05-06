@@ -26,7 +26,32 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 ═══════════════════════════════════════════════ */
 #landingScreen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
 .landing-wrap{width:100%;max-width:480px;text-align:center;animation:fadeUp .6s ease}
-.landing-logo{font-size:60px;margin-bottom:20px;filter:drop-shadow(0 0 20px rgba(37,211,102,.4))}
+
+/* P0 — Landing emoji frame: gradient ring around the per-tenant emoji so it
+   reads as a designed mark instead of a bare emoji. Subtle pulse on hover.   */
+.landing-logo{
+  font-size:48px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;
+  width:96px;height:96px;margin:0 auto 22px;border-radius:24px;
+  background:linear-gradient(140deg,rgba(37,211,102,.18),rgba(74,144,217,.10));
+  border:1px solid rgba(37,211,102,.35);
+  box-shadow:0 0 32px rgba(37,211,102,.28),inset 0 0 0 4px rgba(255,255,255,.02);
+  transition:transform .35s ease,box-shadow .35s ease;
+}
+.landing-logo:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 0 40px rgba(37,211,102,.42),inset 0 0 0 4px rgba(255,255,255,.04)}
+
+/* P0 — Reusable SVG icon system. `currentColor` so icons inherit text colour.
+   Three sizes: .i-sm (label inputs), .i (default 18px), .i-lg (auth logos),
+   .i-xl (role cards).                                                         */
+.i, .i-sm, .i-lg, .i-xl{
+  display:inline-block;vertical-align:-3px;flex-shrink:0;
+  stroke:currentColor;fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+.i-sm{width:13px;height:13px;vertical-align:-2px;margin-right:5px}
+.i{width:18px;height:18px}
+.i-lg{width:42px;height:42px;stroke-width:1.6}
+.i-xl{width:48px;height:48px;stroke-width:1.5}
 .landing-wrap h1{font-family:'Inter',sans-serif;font-size:26px;font-weight:800;color:var(--accent);margin-bottom:8px}
 .landing-wrap p{font-size:12px;color:var(--muted);margin-bottom:40px;letter-spacing:.5px}
 .landing-footer{margin-top:40px;font-size:10px;color:var(--muted);opacity:.5;letter-spacing:.3px;cursor:default;user-select:none;padding:12px}
@@ -35,11 +60,27 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .role-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
 .role-card.user-card::before{background:radial-gradient(ellipse at top,rgba(37,211,102,.08),transparent 70%)}
 .role-card.admin-card::before{background:radial-gradient(ellipse at top,rgba(168,85,247,.08),transparent 70%)}
-.role-card:hover{transform:translateY(-4px);box-shadow:0 16px 48px var(--shadow)}
+.role-card:hover{transform:translateY(-6px);box-shadow:0 20px 56px var(--shadow)}
 .role-card:hover::before{opacity:1}
 .role-card.user-card:hover{border-color:var(--green)}
 .role-card.admin-card:hover{border-color:var(--purple)}
-.role-icon{font-size:40px;margin-bottom:14px}
+.role-card:hover .role-icon{transform:scale(1.06);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+
+/* P0 — Role icon bubble. Soft tinted circle with the SVG inside; replaces
+   the bare emoji that made the cards feel like a chat app.                  */
+.role-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:62px;height:62px;border-radius:18px;margin:0 0 14px;
+  transition:transform .3s ease,box-shadow .3s ease;
+}
+.role-card.user-card .role-icon{
+  background:linear-gradient(140deg,rgba(37,211,102,.18),rgba(37,211,102,.04));
+  border:1px solid rgba(37,211,102,.35);color:var(--green);
+}
+.role-card.admin-card .role-icon{
+  background:linear-gradient(140deg,rgba(168,85,247,.18),rgba(168,85,247,.04));
+  border:1px solid rgba(168,85,247,.35);color:var(--purple);
+}
 .role-card h3{font-family:'Inter',sans-serif;font-size:16px;font-weight:800;margin-bottom:6px}
 .role-card.user-card h3{color:var(--green)}
 .role-card.admin-card h3{color:var(--purple)}
@@ -57,7 +98,18 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .auth-back{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:24px;width:fit-content;transition:color .2s}
 .auth-back:hover{color:var(--text)}
 .auth-logo-wrap{text-align:center;margin-bottom:20px}
-.auth-logo-wrap .icon{font-size:46px;display:block;margin-bottom:10px}
+/* P0 — Auth logo bubble. Same treatment as role-icon but circular for
+   scenes where there's only one icon (login / register / OTP / admin).   */
+.auth-logo-wrap .icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:64px;height:64px;border-radius:50%;margin:0 auto 10px;font-size:30px;
+  background:linear-gradient(140deg,rgba(37,211,102,.16),rgba(37,211,102,.03));
+  border:1px solid rgba(37,211,102,.32);color:var(--green);
+}
+.auth-logo-wrap.admin .icon{
+  background:linear-gradient(140deg,rgba(168,85,247,.16),rgba(168,85,247,.03));
+  border-color:rgba(168,85,247,.32);color:var(--purple);
+}
 .auth-logo-wrap h2{font-family:'Inter',sans-serif;font-size:22px;font-weight:800;margin-bottom:4px}
 .auth-logo-wrap p{font-size:12px;color:var(--muted)}
 .auth-logo-wrap.user h2{color:var(--green)}
