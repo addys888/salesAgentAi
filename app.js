@@ -51,21 +51,25 @@ window.confirmCancel = function() {
 };
 
 
-// ── Toast Notification ──
+// ── Toast Notification (P2 — slide-up bounce via .app-toast in styles.css) ──
 function showToast(msg, isError) {
   var t = document.getElementById('appToast');
   if (!t) {
     t = document.createElement('div');
     t.id = 'appToast';
-    t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:30px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;z-index:99999;transition:opacity .4s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4)";
+    t.className = 'app-toast';
     document.body.appendChild(t);
   }
-  t.style.background = isError ? 'var(--danger)' : 'var(--green)';
-  t.style.color = isError ? '#fff' : '#000';
+  // Toggle variant class (success vs error)
+  t.classList.remove('success', 'error');
+  t.classList.add(isError ? 'error' : 'success');
   t.textContent = msg;
-  t.style.opacity = '1';
+  // Force reflow so class transitions actually animate when the toast
+  // is reused for a new message back-to-back.
+  void t.offsetWidth;
+  t.classList.add('show');
   clearTimeout(t._timer);
-  t._timer = setTimeout(function() { t.style.opacity = '0'; }, 3500);
+  t._timer = setTimeout(function () { t.classList.remove('show'); }, 3500);
 }
 window.showToast = showToast;
 

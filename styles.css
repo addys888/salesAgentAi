@@ -18,7 +18,42 @@
   --purple:#7c3aed;--purple2:#5b21b6;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s}
+/* P2 — Theme-aware transition: any element that uses one of the theme
+   custom properties (--bg / --surface / --border / --text / --muted) will
+   smoothly crossfade when [data-theme] flips. Restricted to colour props
+   so it doesn't slow down layout-changing transitions elsewhere.            */
+html[data-theme] body,
+html[data-theme] .auth-card,
+html[data-theme] .role-card,
+html[data-theme] .field-input,
+html[data-theme] .btn,
+html[data-theme] .admin-tab,
+html[data-theme] .super-tab,
+html[data-theme] .super-card,
+html[data-theme] .auth-tab,
+html[data-theme] .otp-input,
+html[data-theme] .panel,
+html[data-theme] table,
+html[data-theme] th,
+html[data-theme] td{
+  transition:background-color .35s ease,color .35s ease,border-color .35s ease,box-shadow .35s ease;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* P2 — Toast: slide-up + bounce instead of plain fade. The .show class is
+   added/removed by app.js. cubic-bezier overshoots slightly for the bounce. */
+.app-toast{
+  position:fixed;bottom:24px;left:50%;
+  transform:translate(-50%,80px);opacity:0;
+  padding:11px 22px;border-radius:30px;
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
+  z-index:99999;pointer-events:none;white-space:nowrap;
+  box-shadow:0 8px 28px rgba(0,0,0,.45);
+  transition:transform .45s cubic-bezier(.34,1.56,.64,1),opacity .35s ease;
+}
+.app-toast.show{transform:translate(-50%,0);opacity:1}
+.app-toast.success{background:var(--green);color:#000}
+.app-toast.error{background:var(--danger);color:#fff}
 body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(37,211,102,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(37,211,102,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
 
 /* ═══════════════════════════════════════════════
@@ -126,12 +161,18 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .otp-group{display:flex;gap:8px;justify-content:center;margin-bottom:16px}
 .otp-input{width:48px;height:52px;text-align:center;font-size:20px;font-weight:700;letter-spacing:0;background:var(--input-bg);border:1px solid var(--border2);border-radius:11px;color:var(--text);outline:none;transition:border .2s;font-family:'Inter',sans-serif}
 .otp-input:focus{border-color:var(--green)}
-.auth-btn{width:100%;padding:13px;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;margin-top:4px}
+/* P2 — Auth button: visible sheen sweep on hover. The ::before pseudo
+   slides a soft white gradient across the button on hover, suggesting
+   "pressable" without being loud.                                          */
+.auth-btn{position:relative;overflow:hidden;width:100%;padding:13px;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;margin-top:4px}
+.auth-btn::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.18) 50%,transparent 70%);transform:translateX(-100%);transition:transform .55s ease;pointer-events:none}
+.auth-btn:hover::before{transform:translateX(100%)}
 .auth-btn.green{background:var(--green);color:#fff}
-.auth-btn.green:hover{background:var(--accent);transform:translateY(-1px)}
+.auth-btn.green:hover{background:var(--accent);transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,211,102,.32)}
 .auth-btn.purple{background:linear-gradient(135deg,var(--purple2),var(--purple));color:#fff}
-.auth-btn.purple:hover{opacity:.9;transform:translateY(-1px)}
+.auth-btn.purple:hover{opacity:.95;transform:translateY(-1px);box-shadow:0 8px 24px rgba(168,85,247,.32)}
 .auth-btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+.auth-btn:disabled::before{display:none}
 .auth-msg{font-size:11px;text-align:center;margin-top:10px;min-height:16px;transition:all .2s}
 .auth-msg.error{color:var(--danger)}
 .auth-msg.success{color:var(--accent)}
@@ -281,12 +322,26 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .call-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .outcome-row,.templates-row{padding:11px 20px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .section-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;margin-right:2px}
+/* P2 — Outcome buttons: scale + bounce on selection. The keyframes
+   create a stamp feel — quick scale-up then settle.                  */
 .outcome-btn{padding:5px 11px;border-radius:99px;font-size:11px;font-family:'Inter',sans-serif;font-weight:700;border:1px solid transparent;cursor:pointer;transition:all .2s;background:var(--surface2);color:var(--muted)}
 .outcome-btn:hover{transform:scale(1.04)}
+.outcome-btn.sel-interested,
+.outcome-btn.sel-callback,
+.outcome-btn.sel-noanswer,
+.outcome-btn.sel-notinterested{
+  animation:outcomeStamp .35s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 4px 14px rgba(0,0,0,.18);
+}
 .outcome-btn.sel-interested{background:rgba(37,211,102,.2);color:var(--green);border-color:var(--green)}
 .outcome-btn.sel-callback{background:rgba(255,171,64,.2);color:var(--warn);border-color:var(--warn)}
 .outcome-btn.sel-noanswer{background:rgba(90,122,90,.2);color:var(--muted);border-color:var(--muted)}
 .outcome-btn.sel-notinterested{background:rgba(255,82,82,.2);color:var(--danger);border-color:var(--danger)}
+@keyframes outcomeStamp{
+  0%{transform:scale(1)}
+  50%{transform:scale(1.18)}
+  100%{transform:scale(1.04)}
+}
 .tpl-chip{padding:5px 12px;border-radius:8px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .2s;background:rgba(37,211,102,.07);color:var(--green);border:1px solid rgba(37,211,102,.2);display:inline-flex;align-items:center;gap:4px}
 .tpl-chip:hover{background:rgba(37,211,102,.18);transform:translateY(-1px)}
 .progress-wrap{padding:12px 20px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px}
@@ -322,12 +377,37 @@ tr.current .jump-btn{display:none}
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border:none;border-radius:10px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;text-decoration:none;letter-spacing:.3px}
 .btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+/* P2 — Call buttons (📲 WhatsApp + 📞 Phone) gently pulse to telegraph
+   "this is the next action". Pulse stops as soon as the rep clicks one of
+   them: dialer.js markCalled() removes class .pulse from the dialer panel.
+   Pulse is muted (small ring expansion, ~2s cycle) — visible but never
+   distracting.                                                              */
+.btn-call,.btn-phone{position:relative}
+#dialerPanel.pulse .btn-call::after,
+#dialerPanel.pulse .btn-phone::after{
+  content:"";position:absolute;inset:-3px;border-radius:inherit;pointer-events:none;
+  border:2px solid currentColor;opacity:.65;
+  animation:pulseRing 1.8s ease-out infinite;
+}
+@keyframes pulseRing{
+  0%{transform:scale(.97);opacity:.55}
+  70%{transform:scale(1.12);opacity:0}
+  100%{transform:scale(1.12);opacity:0}
+}
 .btn-call{background:var(--green);color:#fff;padding:11px 18px}
 .btn-call:hover{background:var(--accent);box-shadow:0 0 18px rgba(37,211,102,.3)}
 .btn-phone{background:rgba(33,150,243,.15);color:#64b5f6;border:1px solid rgba(33,150,243,.3);padding:11px 18px}
 .btn-phone:hover{background:rgba(33,150,243,.28)}
 .btn-next{background:rgba(37,211,102,.1);color:var(--green);border:1px solid var(--border2)}
 .btn-next:hover:not(:disabled){background:rgba(37,211,102,.2)}
+/* Once the rep has called, the next button itself glows briefly to draw
+   attention — they're done with this contact. Keyframes only run when the
+   .calling-done class is added by JS in markCalled().                       */
+.btn-next.calling-done{box-shadow:0 0 0 0 rgba(37,211,102,.6);animation:btnNextGlow 1.6s ease-out 1}
+@keyframes btnNextGlow{
+  0%{box-shadow:0 0 0 0 rgba(37,211,102,.6)}
+  100%{box-shadow:0 0 0 12px rgba(37,211,102,0)}
+}
 .btn-skip{background:rgba(255,82,82,.08);color:var(--danger);border:1px solid rgba(255,82,82,.2)}
 .btn-skip:hover{background:rgba(255,82,82,.15)}
 .btn-ai{background:linear-gradient(135deg,var(--purple2),var(--purple));color:#fff}

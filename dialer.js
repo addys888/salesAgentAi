@@ -553,6 +553,11 @@ function showContact(i) {
   // F6: DND check each contact
   if(isDNDHours()) showDNDBanner(); else removeDNDBanner();
   setStatus('active','\u25CF Ready'); updateProgress(); updateStats();
+  // P2 \u2014 start the call-button pulse so the rep's eye lands on the action
+  var dp = document.getElementById('dialerPanel');
+  if(dp) dp.classList.add('pulse');
+  var bn = document.getElementById('btnNext');
+  if(bn) bn.classList.remove('calling-done');
 }
 
 window.markCalled = function() {
@@ -564,7 +569,11 @@ window.markCalled = function() {
   hasCalledCurrent = true;
   setStatus('calling','\uD83D\uDCF2 Calling...');
   document.getElementById('avEl').classList.add('calling');
-  document.getElementById('btnNext').disabled = false;
+  // P2 \u2014 call has started: stop the pulse on call buttons, briefly glow Next
+  var dp = document.getElementById('dialerPanel');
+  if(dp) dp.classList.remove('pulse');
+  var bn = document.getElementById('btnNext');
+  if(bn){ bn.disabled = false; bn.classList.add('calling-done'); }
   setTimeout(function(){ document.getElementById('avEl').classList.remove('calling'); }, 4000);
   // F7: Start call timer
   startCallTimer();

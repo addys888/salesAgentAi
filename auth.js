@@ -1297,11 +1297,36 @@ window.loadUsers = async function () {
   }
 };
 
+// P2 — Count-up tween for the admin stat cards. Animates from the
+//  currently-displayed value to the new one over ~600ms with ease-out.
+//  Honours prefers-reduced-motion (writes value instantly).
+function _countUp(el, to) {
+  if (!el) return;
+  to = parseInt(to, 10) || 0;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = to;
+    return;
+  }
+  var from = parseInt(el.textContent, 10);
+  if (isNaN(from)) from = 0;
+  if (from === to) { el.textContent = to; return; }
+  var dur = 600, t0 = performance.now();
+  if (el._raf) cancelAnimationFrame(el._raf);
+  function frame(t) {
+    var p = Math.min(1, (t - t0) / dur);
+    var eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    el.textContent = Math.round(from + (to - from) * eased);
+    if (p < 1) el._raf = requestAnimationFrame(frame);
+    else { el.textContent = to; el._raf = null; }
+  }
+  el._raf = requestAnimationFrame(frame);
+}
+
 function updateAdminStats(total, active, suspended, pending, slotsUsed) {
-  document.getElementById('aStatTotal').textContent = total;
-  document.getElementById('aStatActive').textContent = active;
-  document.getElementById('aStatSuspended').textContent = suspended;
-  document.getElementById('aStatPending').textContent = pending;
+  _countUp(document.getElementById('aStatTotal'), total);
+  _countUp(document.getElementById('aStatActive'), active);
+  _countUp(document.getElementById('aStatSuspended'), suspended);
+  _countUp(document.getElementById('aStatPending'), pending);
   var slotsEl = document.getElementById('aStatSlots');
   var slotMaxEl = document.getElementById('aStatSlotsMax');
   var slotCard = document.getElementById('aStatSlotsCard');
@@ -1309,7 +1334,7 @@ function updateAdminStats(total, active, suspended, pending, slotsUsed) {
   // H1 fix: slot usage tracks ACTIVE reps. Caller may pass slotsUsed; default
   //  to total for backward compatibility if not supplied.
   var used = (typeof slotsUsed === 'number') ? slotsUsed : total;
-  slotsEl.textContent = used;
+  _countUp(slotsEl, used);
   var pct = MAX_REPS > 0 ? (used / MAX_REPS) : 1;
   if (pct >= 1) {
     slotsEl.style.color = 'var(--danger)';
@@ -2315,10 +2340,10 @@ window.loadAllTenants = async function () {
     });
 
     // Update stats bar
-    document.getElementById('sStatTenants').textContent = tenants.length;
-    document.getElementById('sStatReps').textContent = totalReps;
-    document.getElementById('sStatCalls').textContent = totalCalls;
-    document.getElementById('sStatActive').textContent = activeToday;
+    _countUp(document.getElementById('sStatTenants'), tenants.length);
+    _countUp(document.getElementById('sStatReps'), totalReps);
+    _countUp(document.getElementById('sStatCalls'), totalCalls);
+    _countUp(document.getElementById('sStatActive'), activeToday);
 
     // H-1 FIX: Render table with safe DOM construction (no innerHTML with user data)
     var body = document.getElementById('tenantsTableBody');
