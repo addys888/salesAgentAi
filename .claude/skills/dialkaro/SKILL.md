@@ -105,6 +105,7 @@ Run migrations in this order on a fresh Supabase project:
 8. `migration_specialty.sql` — adds `user_profiles.specialty` (free-text) and `leads.specialty` for skill-based routing.
 9. **`migration_security_week0.sql`** — Week-0 hardening (see [docs/SECURITY_WEEK0.md](../../../docs/SECURITY_WEEK0.md)). Creates `platform_secrets`, `public_tenants` view, and `SECURITY DEFINER` RPCs (`verify_tenant_admin`, `verify_super_admin`, `super_admin_*`, `tenant_admin_*`, `tenant_active_rep_count`). Revokes anon read/write on `tenants` and tightens `user_profiles` UPDATE.
 10. **`migration_security_week1.sql`** — Week-1 hardening (see [docs/SECURITY_WEEK1.md](../../../docs/SECURITY_WEEK1.md)). C4: status moves into `auth.users.raw_app_meta_data`, RLS on `call_sessions`/`callbacks`/`leads` writes requires `is_active_session()`. Self-guard trigger blocks reps from changing their own privileged columns. H3: trigger enforces `tenants.max_reps` on activation. H4: `leads` UPDATE → assigned only; DELETE → admin RPC only. New RPCs: `tenant_admin_list_reps`, `tenant_admin_delete_lead`, `_set_user_app_status` (private).
+11. **`migration_security_week2.sql`** — Week-2 hardening (see [docs/SECURITY_WEEK2.md](../../../docs/SECURITY_WEEK2.md)). H5: server-issued trust tokens (`platform_trust_tokens` table + `super_admin_issue_trust_token` / `verify_trust_token` / `revoke_trust_token` RPCs); JS holds only a UUID, can't forge "trusted device". M2: append-only `audit_log` table + `_audit()` helper wired into every admin/super-admin RPC and login flow. M1: `tenant_admin_rotate_webhook_secret` RPC + 🔄 Rotate button in Leads tab. L5: server-side login rate limit — `verify_tenant_admin` and `verify_super_admin` RAISE `rate_limited` after 5 fails in 60s (per-username, not per-device).
 
 ### Tables
 
@@ -196,6 +197,17 @@ The product is live; **as of the last update there were no paying clients yet** 
 - [DEMO_FLOW.md](../../../branding/dialkaro/campaign/DEMO_FLOW.md) — 15-min live demo structure with timing and objection handling
 - [PRICING_PLAYBOOK.md](../../../branding/dialkaro/campaign/PRICING_PLAYBOOK.md) — Starter ₹2,499 / Growth ₹4,999 / Scale ₹9,999 / Enterprise custom; 14-day free trial; early-adopter ₹1,999 lifetime lock
 - [WHATSAPP_SEQUENCES.md](../../../branding/dialkaro/campaign/WHATSAPP_SEQUENCES.md) — drip sequences per ICP segment
+
+## Week-2 hardening invariants (don't regress)
+
+After [migration_security_week2.sql](../../../supabase/migration_security_week2.sql):
+
+1. **Trust-device is server-backed** — JS stores only a UUID in `localStorage[__celer_super_trust_v1]`; verification is `super_admin_verify_trust_token(token)`. Don't reintroduce a pure-localStorage flag (it's forge-able).
+2. **Audit log is the source of truth for "who did what"** — every admin/super-admin mutation calls `_audit(...)`. When adding new admin RPCs, include a `PERFORM _audit(...)` line at the end. Don't bypass it.
+3. **Login lockout lives in `audit_log`** — `_login_locked(username)` counts `admin.login.fail` rows in the last 60s. Don't add a parallel JS-side counter back; the server-side gate is the only enforceable one.
+4. **Webhook secret rotation invalidates the previous secret immediately** — there's no overlap window. The Rotate button auto-reveals the new secret so the admin can update integrations before the old one is fully discarded.
+5. **`audit_log` and `platform_trust_tokens` have no public RLS policies** — they're only reachable via SECURITY DEFINER RPCs. Don't add a `USING (true)` SELECT — it would leak login activity and let attackers enumerate trust tokens.
+6. **Audit rows are atomic with their parent operation** — they're written inside the same SECURITY DEFINER function that performs the change, so a transaction failure rolls back both. Don't split audit writes into a separate RPC.
 
 ## Week-1 hardening invariants (don't regress)
 

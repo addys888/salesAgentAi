@@ -989,6 +989,12 @@ window.adminLogin = async function () {
           p_username: u,
           p_hash: hash
         });
+        // L5: server-side lockout — RPC raises 'rate_limited' after 5 fails/60s
+        if (verifyRes.error && /rate_limited/i.test(verifyRes.error.message || '')) {
+          showMsg('adminMsg', '🔒 Too many failed attempts on this username. Try again in ~60 seconds.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Access Admin Panel →'; }
+          return;
+        }
         if (!verifyRes.error && verifyRes.data && verifyRes.data.length > 0) {
           var t = verifyRes.data[0];
           // RPC returns full tenant fields + is_super flag (no hashes leaked)
@@ -1887,21 +1893,54 @@ var SUPER_OTP_LOCKOUT_MS = 60000;
 var SUPER_RESEND_COOLDOWN_MS = 60000;
 var _superResendTimer = null;
 
-// Trust-this-device helpers (signed localStorage flag, expires after SUPER_TRUST_DAYS)
-function isSuperDeviceTrusted() {
+// Week-2 H5 — trust-device tokens are now server-issued UUIDs stored in
+//  platform_trust_tokens. JS holds the UUID in localStorage and round-trips
+//  it through super_admin_verify_trust_token() each visit; an attacker
+//  setting a forged value in localStorage gets rejected because the row
+//  doesn't exist in the table.
+function _readTrustToken() {
   try {
     var raw = localStorage.getItem(SUPER_TRUST_KEY);
-    if (!raw) return false;
+    if (!raw) return null;
     var data = JSON.parse(raw);
-    return data && data.exp && Date.now() < data.exp;
+    return (data && data.token) ? data.token : null;
+  } catch (e) { return null; }
+}
+
+function _writeTrustToken(token) {
+  try {
+    localStorage.setItem(SUPER_TRUST_KEY, JSON.stringify({ token: token }));
+  } catch (e) { /* localStorage unavailable */ }
+}
+
+function _clearTrustToken() {
+  try { localStorage.removeItem(SUPER_TRUST_KEY); } catch (e) {}
+}
+
+async function isSuperDeviceTrusted() {
+  var token = _readTrustToken();
+  if (!token || !_sb) return false;
+  try {
+    var res = await _sb.rpc('super_admin_verify_trust_token', { p_token: token });
+    if (res.error || res.data !== true) {
+      _clearTrustToken(); // stale or revoked — drop locally
+      return false;
+    }
+    return true;
   } catch (e) { return false; }
 }
-function setSuperDeviceTrusted() {
+
+async function setSuperDeviceTrusted() {
+  if (!_currentSuperHash || !_sb) return;
   try {
-    localStorage.setItem(SUPER_TRUST_KEY, JSON.stringify({
-      exp: Date.now() + (SUPER_TRUST_DAYS * 24 * 60 * 60 * 1000)
-    }));
-  } catch (e) { /* localStorage unavailable */ }
+    var hint = (navigator.userAgent || '').slice(0, 120);
+    var res = await _sb.rpc('super_admin_issue_trust_token', {
+      p_super_hash: _currentSuperHash,
+      p_days: SUPER_TRUST_DAYS,
+      p_device_hint: hint
+    });
+    if (!res.error && res.data) _writeTrustToken(res.data);
+  } catch (e) { console.warn('[trust-token] issue failed:', e.message); }
 }
 
 // Triple-click footer to reveal super admin login
@@ -1944,10 +1983,21 @@ window.superAdminLogin = async function () {
   // is cached in _currentSuperHash for subsequent super-admin RPCs.
   var hash = await sha256(pass);
   var verified = false;
+  var rateLimited = false;
   try {
     var verifyRes = await _sb.rpc('verify_super_admin', { p_hash: hash });
-    verified = !verifyRes.error && verifyRes.data === true;
+    if (verifyRes.error && /rate_limited/i.test(verifyRes.error.message || '')) {
+      rateLimited = true;
+    } else {
+      verified = !verifyRes.error && verifyRes.data === true;
+    }
   } catch (e) { console.warn('Super admin verify:', e.message); }
+
+  if (rateLimited) {
+    showMsg('superAdminMsg', '🔒 Too many failed attempts. Try again in ~60 seconds.');
+    document.getElementById('superAdminPass').value = '';
+    return;
+  }
 
   if (!verified) {
     _superAttempts++;
@@ -1966,8 +2016,10 @@ window.superAdminLogin = async function () {
   _currentSuperHash = hash; // cached for super_admin_* RPCs
   document.getElementById('superAdminPass').value = '';
 
-  // Step 2 — 2FA: skip OTP if device is trusted, otherwise send email OTP
-  if (isSuperDeviceTrusted()) {
+  // Step 2 — 2FA: skip OTP if device holds a valid server-issued trust
+  // token (Week-2 H5). Otherwise send email OTP.
+  var deviceTrusted = await isSuperDeviceTrusted();
+  if (deviceTrusted) {
     document.getElementById('superAuthScreen').classList.remove('visible');
     enterSuperConsole();
     return;
@@ -2060,7 +2112,7 @@ window.superAdminVerifyOtp = async function () {
     try { await _sb.auth.signOut(); } catch (e) { /* best effort */ }
     _superOtpAttempts = 0;
     var trustChk = document.getElementById('superOtpTrust');
-    if (trustChk && trustChk.checked) setSuperDeviceTrusted();
+    if (trustChk && trustChk.checked) { await setSuperDeviceTrusted(); }
     if (_superResendTimer) { clearInterval(_superResendTimer); _superResendTimer = null; }
     document.getElementById('superOtpScreen').classList.remove('visible');
     document.getElementById('superOtpInput').value = '';
@@ -2083,20 +2135,146 @@ window.superAdminBackToPassword = function () {
   setTimeout(function () { document.getElementById('superAdminPass').focus(); }, 200);
 };
 
-window.superAdminLogout = function () {
-  _currentSuperHash = null; // Week-0 hardening: drop the cached super-admin hash
+window.superAdminLogout = async function () {
+  // Week-2 H5: revoke the server-side trust token (if any) before clearing locals.
+  var token = _readTrustToken();
+  if (token && _sb) {
+    try { await _sb.rpc('super_admin_revoke_trust_token', { p_token: token }); } catch (e) {}
+  }
+  _clearTrustToken();
+  _currentSuperHash = null; // drop the cached super-admin hash
   document.getElementById('superPanel').style.display = 'none';
   document.getElementById('landingScreen').style.display = 'flex'; // M-9 FIX: consistent with other logouts
 };
 
 window.switchSuperTab = function (tab) {
-  ['tenants', 'addtenant', 'globalstats'].forEach(function (t) {
+  ['tenants', 'addtenant', 'globalstats', 'audit'].forEach(function (t) {
     var btn = document.getElementById('superTab-' + t);
     var panel = document.getElementById('superPanel-' + t);
     if (btn) btn.className = 'super-tab' + (t === tab ? ' active' : '');
     if (panel) panel.style.display = (t === tab) ? 'block' : 'none';
   });
   if (tab === 'globalstats') loadGlobalStats();
+  if (tab === 'audit') loadAuditLog();
+};
+
+// ════════════════════════════════════════════════════════
+//  WEEK-2 M2 — Audit Log viewer (super admin only)
+// ════════════════════════════════════════════════════════
+window.loadAuditLog = async function () {
+  if (!_sb || !_currentSuperHash) return;
+  var body = document.getElementById('auditBody');
+  if (!body) return;
+  body.textContent = '';
+  var loadingTr = document.createElement('tr');
+  var loadingTd = document.createElement('td');
+  loadingTd.colSpan = 6;
+  loadingTd.style.cssText = 'text-align:center;padding:20px;color:var(--muted)';
+  loadingTd.textContent = 'Loading…';
+  loadingTr.appendChild(loadingTd);
+  body.appendChild(loadingTr);
+
+  try {
+    var res = await _sb.rpc('super_admin_recent_audit', {
+      p_super_hash: _currentSuperHash,
+      p_limit: 200
+    });
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+
+    var filterEl = document.getElementById('auditFilter');
+    var filter = filterEl ? filterEl.value : 'all';
+    if (filter && filter !== 'all') {
+      rows = rows.filter(function (r) {
+        var a = r.action || '';
+        if (filter === 'login') return a.indexOf('login') >= 0;
+        if (filter === 'login.fail') return a === 'admin.login.fail';
+        if (filter === 'tenant') return a.indexOf('tenant.') === 0;
+        if (filter === 'rep') return a.indexOf('rep.') === 0;
+        if (filter === 'lead') return a.indexOf('lead.') === 0;
+        if (filter === 'webhook') return a.indexOf('webhook') >= 0;
+        if (filter === 'trust') return a.indexOf('trust') >= 0;
+        return true;
+      });
+    }
+
+    body.textContent = '';
+    if (!rows.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 6;
+      td.style.cssText = 'text-align:center;padding:20px;color:var(--muted)';
+      td.textContent = 'No matching audit events.';
+      tr.appendChild(td);
+      body.appendChild(tr);
+      return;
+    }
+
+    // Build a tenant-id → app_name map for friendlier rendering
+    var tenantNameMap = {};
+    try {
+      var tRes = await _sb.from('public_tenants').select('id, app_name, slug');
+      (tRes.data || []).forEach(function (t) { tenantNameMap[t.id] = t.app_name || t.slug; });
+    } catch (e) { /* non-fatal */ }
+
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+
+      var tdWhen = document.createElement('td');
+      tdWhen.style.cssText = 'font-size:11px;color:var(--muted);white-space:nowrap';
+      tdWhen.textContent = r.event_at ? new Date(r.event_at).toLocaleString('en-IN') : '—';
+      tr.appendChild(tdWhen);
+
+      var tdActor = document.createElement('td');
+      tdActor.style.fontSize = '11px';
+      var actorIcons = {
+        celerapps_super: '⚡', tenant_admin: '🛡️', tenant_super: '👑',
+        webhook: '🔌', system: '⚙️'
+      };
+      tdActor.textContent = (actorIcons[r.actor_kind] || '·') + ' ' + (r.actor_kind || '?');
+      tr.appendChild(tdActor);
+
+      var tdAction = document.createElement('td');
+      tdAction.style.cssText = 'font-family:monospace;font-size:11px;font-weight:600';
+      var color = 'var(--text)';
+      if (r.action === 'admin.login.fail' || r.action === 'admin.login.locked') color = 'var(--danger)';
+      else if (r.action === 'admin.login.success' || r.action === 'super.login.success') color = 'var(--green)';
+      else if (r.action.indexOf('rep.rejected') === 0 || r.action.indexOf('lead.delete') === 0) color = 'var(--warn)';
+      tdAction.style.color = color;
+      tdAction.textContent = r.action || '—';
+      tr.appendChild(tdAction);
+
+      var tdTenant = document.createElement('td');
+      tdTenant.style.fontSize = '11px';
+      tdTenant.textContent = r.tenant_id ? (tenantNameMap[r.tenant_id] || r.tenant_id.substring(0, 8) + '…') : '—';
+      tr.appendChild(tdTenant);
+
+      var tdTarget = document.createElement('td');
+      tdTarget.style.cssText = 'font-family:monospace;font-size:10px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      tdTarget.textContent = (r.target_kind ? r.target_kind + ': ' : '') + (r.target_id || '—');
+      tdTarget.title = r.target_id || '';
+      tr.appendChild(tdTarget);
+
+      var tdPayload = document.createElement('td');
+      tdPayload.style.cssText = 'font-family:monospace;font-size:10px;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      try {
+        tdPayload.textContent = r.payload ? JSON.stringify(r.payload) : '';
+        tdPayload.title = r.payload ? JSON.stringify(r.payload, null, 2) : '';
+      } catch (e) { tdPayload.textContent = ''; }
+      tr.appendChild(tdPayload);
+
+      body.appendChild(tr);
+    });
+  } catch (e) {
+    body.textContent = '';
+    var errTr = document.createElement('tr');
+    var errTd = document.createElement('td');
+    errTd.colSpan = 6;
+    errTd.style.cssText = 'text-align:center;padding:20px;color:var(--danger)';
+    errTd.textContent = 'Could not load audit log: ' + (e.message || e);
+    errTr.appendChild(errTd);
+    body.appendChild(errTr);
+  }
 };
 
 // ── Load All Tenants ──────────────────────────────────
@@ -2761,6 +2939,52 @@ window.copyWebhookSecret = function () {
 window.toggleWebhookSecret = function () {
   var el = document.getElementById('webhookSecretDisplay');
   if (el) el.type = el.type === 'password' ? 'text' : 'password';
+};
+
+// Week-2 M1 — Rotate webhook secret. Server-side RPC generates a fresh
+//  random secret (24 bytes hex) and updates the tenants row. UI shows the
+//  new value and pops it open so the admin can copy it. Audited.
+window.rotateWebhookSecret = async function () {
+  if (!_currentAdminHash) {
+    await appAlert('Admin session expired — please log in again.', '🔒');
+    return;
+  }
+  if (!currentTenant) return;
+  var ok = await appConfirm(
+    '⚠️ Rotating will invalidate the current webhook secret immediately.\n\n' +
+    'You\'ll need to update every integration that posts leads to DialKaro:\n' +
+    '  • Website snippet\n' +
+    '  • Zapier / Pabbly Connect\n' +
+    '  • Facebook Lead Ads\n' +
+    '  • Any custom API integrations\n\n' +
+    'Existing leads are NOT affected. Continue?',
+    '🔄'
+  );
+  if (!ok) return;
+
+  try {
+    var res = await _sb.rpc('tenant_admin_rotate_webhook_secret', {
+      p_admin_hash: _currentAdminHash,
+      p_tenant_id: currentTenant.id
+    });
+    if (res.error) throw res.error;
+    if (!res.data) throw new Error('Empty response');
+
+    currentTenant.webhook_secret = res.data;
+    var secretEl = document.getElementById('webhookSecretDisplay');
+    if (secretEl) {
+      secretEl.value = res.data;
+      secretEl.type = 'text'; // reveal so the admin can copy immediately
+    }
+    showToast('🔄 Webhook secret rotated — copy & update integrations now');
+  } catch (e) {
+    var msg = (e && e.message) || '';
+    if (msg.indexOf('unauthorized') >= 0) {
+      await appAlert('🔒 Not authorised — please log in as admin.', '🔒');
+    } else {
+      await appAlert('Failed to rotate secret: ' + msg, '❌');
+    }
+  }
 };
 
 // Website snippet modal

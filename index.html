@@ -308,6 +308,10 @@
               <input type="password" id="webhookSecretDisplay" readonly style="flex:1;font-size:11px;font-family:monospace;padding:8px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text)">
               <button class="btn" onclick="toggleWebhookSecret()" style="font-size:10px;padding:6px 12px" aria-label="Toggle secret visibility">👁</button>
               <button class="btn" onclick="copyWebhookSecret()" style="font-size:10px;padding:6px 12px" aria-label="Copy webhook secret">📋</button>
+              <button class="btn" onclick="rotateWebhookSecret()" style="font-size:10px;padding:6px 12px;background:rgba(255,171,64,.15);border-color:rgba(255,171,64,.4);color:var(--warn)" aria-label="Rotate webhook secret" title="Generate a new webhook secret — invalidates the current one">🔄 Rotate</button>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">
+              Rotating invalidates the current secret. Update all integrations (website snippet, Zapier, Facebook) with the new value.
             </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
@@ -797,6 +801,7 @@
       <button class="super-tab active" id="superTab-tenants" onclick="switchSuperTab('tenants')">🏢 Tenants</button>
       <button class="super-tab" id="superTab-addtenant" onclick="switchSuperTab('addtenant')">➕ Add Tenant</button>
       <button class="super-tab" id="superTab-globalstats" onclick="switchSuperTab('globalstats')">📊 Global Stats</button>
+      <button class="super-tab" id="superTab-audit" onclick="switchSuperTab('audit')">📋 Audit Log</button>
     </div>
 
     <!-- TAB: Tenants List -->
@@ -881,6 +886,38 @@
               <th>Tenant</th><th>Reps</th><th>Total Calls</th><th>Interested</th><th>Callbacks</th><th>Avg Duration</th>
             </tr></thead>
             <tbody id="globalStatsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Audit Log (Week-2 M2) -->
+    <div id="superPanel-audit" style="display:none">
+      <div class="super-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <h3 style="color:#4A90D9;margin:0">📋 Audit Log</h3>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="auditFilter" onchange="loadAuditLog()" style="background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px">
+              <option value="all">All actions</option>
+              <option value="login">Logins (success + fail)</option>
+              <option value="login.fail">Failed logins only</option>
+              <option value="tenant">Tenant changes</option>
+              <option value="rep">Rep status changes</option>
+              <option value="lead">Lead deletions</option>
+              <option value="webhook">Webhook rotations</option>
+              <option value="trust">Trust-token events</option>
+            </select>
+            <button class="btn" onclick="loadAuditLog()" style="font-size:10px;padding:6px 12px">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="table-scroll-wrap">
+          <table class="super-table">
+            <thead><tr>
+              <th>When</th><th>Actor</th><th>Action</th><th>Tenant</th><th>Target</th><th>Detail</th>
+            </tr></thead>
+            <tbody id="auditBody">
+              <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading…</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
