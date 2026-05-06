@@ -519,10 +519,11 @@ tr.current .jump-btn{display:none}
 /* ═══════════════════════════════════════════════
    ADMIN TABS
 ═══════════════════════════════════════════════ */
-.admin-tabs{display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:3px;margin-bottom:20px}
-.admin-tab{padding:8px 16px;border-radius:8px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;color:var(--muted);border:none;background:none}
+.admin-tabs{display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:3px;margin-bottom:20px;flex-wrap:wrap}
+.admin-tab{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;color:var(--muted);border:none;background:none}
+.admin-tab .i-sm{margin-right:0;vertical-align:0}
 .admin-tab.active{background:var(--surface);color:var(--purple);box-shadow:0 2px 8px var(--shadow)}
-.admin-tab:hover:not(.active){color:var(--text)}
+.admin-tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,.03)}
 
 /* ANIMATIONS */
 @keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
@@ -657,8 +658,9 @@ tr.current .jump-btn{display:none}
 .sstat .val{font-size:28px;font-weight:800;color:var(--text)}
 .sstat .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
 
-.super-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border2);padding-bottom:8px}
-.super-tab{background:none;border:none;color:var(--muted);padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0;transition:all .2s;font-family:'Inter',sans-serif}
+.super-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border2);padding-bottom:8px;flex-wrap:wrap}
+.super-tab{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--muted);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0;transition:all .2s;font-family:'Inter',sans-serif}
+.super-tab .i-sm{margin-right:0;vertical-align:0}
 .super-tab:hover{color:var(--warn);background:rgba(255,171,64,.06)}
 .super-tab.active{color:var(--warn);background:rgba(255,171,64,.1);border-bottom:2px solid var(--warn)}
 
