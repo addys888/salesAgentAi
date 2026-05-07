@@ -50,23 +50,63 @@ const APP_CONFIG = {
   adminCardDesc: 'Manage your team, track activity and control access',
 };
 
+// P3.1 — Per-tenant brand marks. Map tenant slug → inline SVG. The dialkaro
+//  default ships a custom phone+chat mark instead of the ☎️ emoji. Other
+//  tenants keep their per-tenant emoji unless their slug is added here.
+var BRAND_MARKS = {
+  dialkaro: '<svg class="brand-svg" viewBox="0 0 64 64" aria-hidden="true">'
+    + '<defs>'
+    +   '<linearGradient id="dkg" x1="0" y1="0" x2="1" y2="1">'
+    +     '<stop offset="0" stop-color="#25D366"/><stop offset="1" stop-color="#1ba84d"/>'
+    +   '</linearGradient>'
+    + '</defs>'
+    // Rounded backdrop
+    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#dkg)"/>'
+    // Subtle inner bevel
+    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
+    // Chat bubble
+    + '<path d="M14 20a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v8a8 8 0 0 1-8 8h-9l-7 6v-6h-1a8 8 0 0 1-8-8z" fill="rgba(255,255,255,.16)"/>'
+    // Handset (curved)
+    + '<path d="M40 38c-2.5 4-7 6.5-12.5 6.5-7.5 0-13.5-6-13.5-13.5 0-3.6 1.4-6.6 3.6-9 .9-1 2.4-1.1 3.4-.2l3.2 2.9c1 .9 1.1 2.4.2 3.4l-1.5 1.7a17 17 0 0 0 6.5 6.5l1.6-1.5a2.4 2.4 0 0 1 3.4.2l2.9 3.2c.9 1 .8 2.5-.2 3.4-.4.4-.9.7-1.4.9z" fill="#fff"/>'
+    // Signal dot
+    + '<circle cx="46" cy="18" r="3.5" fill="#fff"/>'
+    + '<circle cx="46" cy="18" r="1.5" fill="#1ba84d"/>'
+    + '</svg>'
+};
+
+// Render either a brand SVG mark or the per-tenant emoji into a target element.
+function _renderBrandMark(el, slug, emoji) {
+  if (!el) return;
+  if (slug && BRAND_MARKS[slug]) {
+    el.innerHTML = BRAND_MARKS[slug];
+    el.classList.add('has-brand-mark');
+  } else {
+    el.textContent = emoji || '';
+    el.classList.remove('has-brand-mark');
+  }
+}
+
 function applyAppConfig() {
   var C = APP_CONFIG;
   document.title = C.appName + ' — Sales Dialer';
   var mapping = {
-    landingH1: 'landingTitle', landingTagline: 'landingTagline', landingEmoji: 'appEmoji',
+    landingH1: 'landingTitle', landingTagline: 'landingTagline',
     userCardTitle: 'userCardTitle', userCardDesc: 'userCardDesc',
     adminCardTitle: 'adminCardTitle', adminCardDesc: 'adminCardDesc',
     userAuthTitle: 'userAuthTitle', userAuthSub: 'userAuthSub',
     adminAuthTitle: 'adminAuthTitle', adminAuthSub: 'adminAuthSub',
     adminDashH1: 'adminDashTitle', adminDashSub: 'adminDashSub',
-    appHeaderH1: 'dialerTitle', appHeaderSub: 'appSubtitle', appLogoEmoji: 'appEmoji',
+    appHeaderH1: 'dialerTitle', appHeaderSub: 'appSubtitle',
     uploadZoneH2: 'uploadTitle', uploadZoneSub: 'uploadSubtitle'
   };
   Object.keys(mapping).forEach(function (elId) {
     var el = document.getElementById(elId);
     if (el) el.textContent = C[mapping[elId]];
   });
+  // P3.1 — landing + dialer header logos render the brand SVG when available.
+  var slug = (typeof currentTenant !== 'undefined' && currentTenant) ? currentTenant.slug : 'dialkaro';
+  _renderBrandMark(document.getElementById('landingEmoji'), slug, C.appEmoji);
+  _renderBrandMark(document.getElementById('appLogoEmoji'), slug, C.appEmoji);
   var fn = document.getElementById('footerNote');
   if (fn) fn.textContent = C.footerNote;
 }

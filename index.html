@@ -233,10 +233,18 @@
         <button class="btn btn-ai" onclick="loadUsers()" style="font-size:10px;padding:5px 12px">🔄 Refresh</button>
       </div>
       <div id="usersTableWrap">
-        <div class="admin-loading" id="usersLoading">
-          <div class="ai-spinner" style="border-top-color:var(--purple)"></div> Loading users...
+        <div class="skel-rows" id="usersLoading">
+          <div class="skel-row"><span class="skel avatar"></span><span class="skel line-md"></span><span class="skel line-lg"></span><span class="skel pill"></span></div>
+          <div class="skel-row"><span class="skel avatar"></span><span class="skel line-sm"></span><span class="skel line-lg"></span><span class="skel pill"></span></div>
+          <div class="skel-row"><span class="skel avatar"></span><span class="skel line-md"></span><span class="skel line-lg"></span><span class="skel pill"></span></div>
         </div>
-        <div class="admin-empty" id="usersEmpty" style="display:none">No users registered yet.</div>
+        <div class="empty-state" id="usersEmpty" style="display:none">
+          <div class="illust">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h4>No reps yet</h4>
+          <p>Share your <strong>Team Code</strong> with reps so they can self-register. Pending registrations appear here for you to approve.</p>
+        </div>
         <div style="overflow-x:auto">
           <table class="users-table" id="usersTable" style="display:none">
             <thead><tr>
@@ -327,10 +335,19 @@
 
         <!-- Leads Table -->
         <div id="leadsTableWrap">
-          <div class="admin-loading" id="leadsLoading" style="display:none">
-            <div class="ai-spinner" style="border-top-color:var(--green)"></div> Loading leads...
+          <div class="skel-rows" id="leadsLoading" style="display:none">
+            <div class="skel-row"><span class="skel line-sm"></span><span class="skel line-md"></span><span class="skel line-lg"></span><span class="skel pill"></span></div>
+            <div class="skel-row"><span class="skel line-sm"></span><span class="skel line-md"></span><span class="skel line-lg"></span><span class="skel pill"></span></div>
+            <div class="skel-row"><span class="skel line-sm"></span><span class="skel line-md"></span><span class="skel line-lg"></span><span class="skel pill"></span></div>
           </div>
-          <div class="admin-empty" id="leadsEmpty">No leads captured yet. Connect a webhook source to start receiving leads automatically.</div>
+          <div class="empty-state green" id="leadsEmpty">
+            <div class="illust">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </div>
+            <h4>No leads captured yet</h4>
+            <p>Connect a webhook source — your website form, Zapier, Pabbly, or Facebook Lead Ads — and leads will land here automatically and route to the right rep.</p>
+            <div class="hint">↑ Use the <strong>Website Snippet</strong> or <strong>Zapier Guide</strong> buttons above to set it up</div>
+          </div>
           <div style="overflow-x:auto">
             <table class="users-table" id="leadsTable" style="display:none">
               <thead><tr>
