@@ -57,20 +57,19 @@ var BRAND_MARKS = {
   dialkaro: '<svg class="brand-svg" viewBox="0 0 64 64" aria-hidden="true">'
     + '<defs>'
     +   '<linearGradient id="dkg" x1="0" y1="0" x2="1" y2="1">'
-    +     '<stop offset="0" stop-color="#25D366"/><stop offset="1" stop-color="#1ba84d"/>'
+    +     '<stop offset="0" stop-color="#ff5252"/><stop offset="1" stop-color="#d32f2f"/>'
     +   '</linearGradient>'
     + '</defs>'
-    // Rounded backdrop
+    // Rounded backdrop — bold red
     + '<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#dkg)"/>'
     // Subtle inner bevel
     + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
-    // Chat bubble
-    + '<path d="M14 20a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v8a8 8 0 0 1-8 8h-9l-7 6v-6h-1a8 8 0 0 1-8-8z" fill="rgba(255,255,255,.16)"/>'
-    // Handset (curved)
-    + '<path d="M40 38c-2.5 4-7 6.5-12.5 6.5-7.5 0-13.5-6-13.5-13.5 0-3.6 1.4-6.6 3.6-9 .9-1 2.4-1.1 3.4-.2l3.2 2.9c1 .9 1.1 2.4.2 3.4l-1.5 1.7a17 17 0 0 0 6.5 6.5l1.6-1.5a2.4 2.4 0 0 1 3.4.2l2.9 3.2c.9 1 .8 2.5-.2 3.4-.4.4-.9.7-1.4.9z" fill="#fff"/>'
+    // Phone handset (classic receiver shape — tilted, white)
+    + '<path d="M42.4 38.8c-1.6 2.8-4 5-7 6.2-3 1.2-6.4 1-9.4-.4-3-1.4-5.4-4-6.6-7-.6-1.4-.8-3-.6-4.4.2-1.2.8-2.2 1.8-2.8l2.6-1.6c1-.6 2.2-.4 3 .4l2.4 2.6c.6.8.6 1.8 0 2.6l-1 1.2c1.2 2.2 3 4 5.2 5.2l1.2-1c.8-.6 1.8-.6 2.6 0l2.6 2.4c.8.8 1 2 .4 3z" fill="#fff"/>'
+    + '<path d="M36 16c5.6 2 9.6 7 10 13" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
+    + '<path d="M36 22c3 1.2 5.2 3.8 5.6 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
     // Signal dot
-    + '<circle cx="46" cy="18" r="3.5" fill="#fff"/>'
-    + '<circle cx="46" cy="18" r="1.5" fill="#1ba84d"/>'
+    + '<circle cx="36" cy="16" r="2" fill="#fff"/>'
     + '</svg>'
 };
 
