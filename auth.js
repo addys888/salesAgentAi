@@ -63,14 +63,14 @@ var BRAND_MARKS = {
     // Rounded backdrop — red
     + '<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#dkg)"/>'
     // Subtle inner bevel
-    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
-    // Chat bubble
-    + '<path d="M14 20a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v8a8 8 0 0 1-8 8h-9l-7 6v-6h-1a8 8 0 0 1-8-8z" fill="rgba(255,255,255,.16)"/>'
-    // Handset (curved)
-    + '<path d="M40 38c-2.5 4-7 6.5-12.5 6.5-7.5 0-13.5-6-13.5-13.5 0-3.6 1.4-6.6 3.6-9 .9-1 2.4-1.1 3.4-.2l3.2 2.9c1 .9 1.1 2.4.2 3.4l-1.5 1.7a17 17 0 0 0 6.5 6.5l1.6-1.5a2.4 2.4 0 0 1 3.4.2l2.9 3.2c.9 1 .8 2.5-.2 3.4-.4.4-.9.7-1.4.9z" fill="#fff"/>'
-    // Signal dot
-    + '<circle cx="46" cy="18" r="3.5" fill="#fff"/>'
-    + '<circle cx="46" cy="18" r="1.5" fill="#b91c1c"/>'
+    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1"/>'
+    // Phone handset — centered, filled white, tilted
+    + '<g transform="translate(32,32) rotate(-135) translate(-12,-12)">'
+    +   '<path d="M5.8 2.4C6.4 1 7.8 0 9.4 0h2.8c1.2 0 2.2 1 2.2 2.2v3.4c0 1.2-1 2.2-2.2 2.2h-1L11 9c.8 2 2 3.8 3.4 5.2 1.4 1.4 3.2 2.6 5.2 3.4l1.2-.2h.2c1.2 0 2.2 1 2.2 2.2v3.4c0 1.2-1 2.2-2.2 2.2h-.6c-1.6 0-3-.6-4.2-1.4C12 20.6 3.4 12 .4 7.8-.4 6.6 0 5 .8 3.8z" fill="#fff"/>'
+    + '</g>'
+    // Signal arcs — top-right, radiating from earpiece
+    + '<path d="M39 17a8 8 0 0 1 2.2 5.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
+    + '<path d="M43 13a13 13 0 0 1 3.5 9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
     + '</svg>'
 };
 
