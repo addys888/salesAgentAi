@@ -56,20 +56,23 @@ const APP_CONFIG = {
 var BRAND_MARKS = {
   dialkaro: '<svg class="brand-svg" viewBox="0 0 64 64" aria-hidden="true">'
     + '<defs>'
-    +   '<linearGradient id="dkg" x1="0" y1="0" x2="1" y2="1">'
-    +     '<stop offset="0" stop-color="#ff5252"/><stop offset="1" stop-color="#d32f2f"/>'
-    +   '</linearGradient>'
+    +   '<radialGradient id="dkg" cx="50%" cy="38%" r="65%">'
+    +     '<stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#991b1b"/>'
+    +   '</radialGradient>'
     + '</defs>'
-    // Rounded backdrop — bold red
+    // Rounded backdrop — rich red with depth
     + '<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#dkg)"/>'
-    // Subtle inner bevel
-    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
-    // Phone handset (classic receiver shape — tilted, white)
-    + '<path d="M42.4 38.8c-1.6 2.8-4 5-7 6.2-3 1.2-6.4 1-9.4-.4-3-1.4-5.4-4-6.6-7-.6-1.4-.8-3-.6-4.4.2-1.2.8-2.2 1.8-2.8l2.6-1.6c1-.6 2.2-.4 3 .4l2.4 2.6c.6.8.6 1.8 0 2.6l-1 1.2c1.2 2.2 3 4 5.2 5.2l1.2-1c.8-.6 1.8-.6 2.6 0l2.6 2.4c.8.8 1 2 .4 3z" fill="#fff"/>'
-    + '<path d="M36 16c5.6 2 9.6 7 10 13" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
-    + '<path d="M36 22c3 1.2 5.2 3.8 5.6 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
-    // Signal dot
-    + '<circle cx="36" cy="16" r="2" fill="#fff"/>'
+    // Glass highlight
+    + '<ellipse cx="32" cy="15" rx="22" ry="13" fill="rgba(255,255,255,.08)"/>'
+    // Subtle border
+    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="0.8"/>'
+    // Phone handset — Lucide phone shape, white, scaled & rotated
+    + '<g transform="translate(28,36) scale(1.5) rotate(-30,-2,-4)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    +   '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>'
+    + '</g>'
+    // Signal arcs from earpiece area
+    + '<path d="M40 14c1.8 1.5 3 3.8 3 6.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
+    + '<path d="M44 10c3 2.5 5 6.2 5 10.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
     + '</svg>'
 };
 
