@@ -56,23 +56,21 @@ const APP_CONFIG = {
 var BRAND_MARKS = {
   dialkaro: '<svg class="brand-svg" viewBox="0 0 64 64" aria-hidden="true">'
     + '<defs>'
-    +   '<radialGradient id="dkg" cx="50%" cy="38%" r="65%">'
-    +     '<stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#991b1b"/>'
-    +   '</radialGradient>'
+    +   '<linearGradient id="dkg" x1="0" y1="0" x2="1" y2="1">'
+    +     '<stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#b91c1c"/>'
+    +   '</linearGradient>'
     + '</defs>'
-    // Rounded backdrop — rich red with depth
+    // Rounded backdrop — red
     + '<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#dkg)"/>'
-    // Glass highlight
-    + '<ellipse cx="32" cy="15" rx="22" ry="13" fill="rgba(255,255,255,.08)"/>'
-    // Subtle border
-    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="0.8"/>'
-    // Phone handset — Lucide phone shape, white, scaled & rotated
-    + '<g transform="translate(28,36) scale(1.5) rotate(-30,-2,-4)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-    +   '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>'
-    + '</g>'
-    // Signal arcs from earpiece area
-    + '<path d="M40 14c1.8 1.5 3 3.8 3 6.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
-    + '<path d="M44 10c3 2.5 5 6.2 5 10.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
+    // Subtle inner bevel
+    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
+    // Chat bubble
+    + '<path d="M14 20a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v8a8 8 0 0 1-8 8h-9l-7 6v-6h-1a8 8 0 0 1-8-8z" fill="rgba(255,255,255,.16)"/>'
+    // Handset (curved)
+    + '<path d="M40 38c-2.5 4-7 6.5-12.5 6.5-7.5 0-13.5-6-13.5-13.5 0-3.6 1.4-6.6 3.6-9 .9-1 2.4-1.1 3.4-.2l3.2 2.9c1 .9 1.1 2.4.2 3.4l-1.5 1.7a17 17 0 0 0 6.5 6.5l1.6-1.5a2.4 2.4 0 0 1 3.4.2l2.9 3.2c.9 1 .8 2.5-.2 3.4-.4.4-.9.7-1.4.9z" fill="#fff"/>'
+    // Signal dot
+    + '<circle cx="46" cy="18" r="3.5" fill="#fff"/>'
+    + '<circle cx="46" cy="18" r="1.5" fill="#b91c1c"/>'
     + '</svg>'
 };
 
