@@ -952,10 +952,9 @@ function getRepName() {
 function _showCelerChip() {
   var chip = document.getElementById('tplChipCeler');
   if (!chip) return;
-  var h = window.location.hostname;
-  var show = (currentTenant && currentTenant.slug === 'dialkaro') ||
-             h === 'dialkaro.celerapps.com' || h.endsWith('.github.io') ||
-             h === 'localhost' || h === '127.0.0.1';
+  // Only show for the CelerApps-owned 'dialkaro' tenant, not for other tenants
+  // sharing the same hostname (e.g. Ocean Crew Management on dialkaro.celerapps.com)
+  var show = currentTenant && currentTenant.slug === 'dialkaro';
   chip.style.display = show ? 'inline-block' : 'none';
 }
 

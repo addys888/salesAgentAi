@@ -148,16 +148,15 @@ serve(async (req: Request) => {
     })
   }
 
-  // ── 4. Existing user? Check status ──
-  const { data: existingUser } = await sb
+  // ── 4. Existing user? Check both user_profiles AND auth.users ──
+  const { data: existingProfile } = await sb
     .from('user_profiles')
     .select('id, status, tenant_id')
     .eq('email', email)
     .maybeSingle()
 
-  if (existingUser) {
-    // Don't reveal which tenant they belong to (privacy).
-    if (existingUser.status === 'rejected') {
+  if (existingProfile) {
+    if (existingProfile.status === 'rejected') {
       return jsonResponse(403, {
         error: 'Your previous registration was rejected. Please contact your manager.',
       })
@@ -169,7 +168,7 @@ serve(async (req: Request) => {
   const { data: created, error: createErr } = await sb.auth.admin.createUser({
     email,
     password,
-    email_confirm: true, // skip Supabase confirmation email — we vetted via Turnstile + Team Code
+    email_confirm: true,
     user_metadata: { full_name: fullName, phone_number: phone },
     app_metadata: { status: 'pending', tenant_id: tenant.id },
   })
@@ -177,7 +176,7 @@ serve(async (req: Request) => {
   if (createErr || !created.user) {
     console.error('[register-rep] createUser error:', createErr)
     const msg = (createErr?.message || '').toLowerCase()
-    if (msg.includes('already')) {
+    if (msg.includes('already') || msg.includes('unique') || msg.includes('duplicate')) {
       return jsonResponse(409, { error: 'Email already registered. Please log in instead.' })
     }
     return jsonResponse(500, { error: 'Could not create account — please try again' })
@@ -185,24 +184,23 @@ serve(async (req: Request) => {
 
   const userId = created.user.id
 
-  // ── 6. Insert user_profiles row ──
-  const { error: profileErr } = await sb.from('user_profiles').insert({
+  // ── 6. Insert user_profiles row (upsert to handle orphan/retry scenarios) ──
+  const { error: profileErr } = await sb.from('user_profiles').upsert({
     id: userId,
     full_name: fullName,
     email,
     phone_number: phone,
     status: 'pending',
     tenant_id: tenant.id,
-  })
+  }, { onConflict: 'id' })
 
   if (profileErr) {
-    console.error('[register-rep] user_profiles insert error:', profileErr)
+    console.error('[register-rep] user_profiles upsert error:', profileErr)
     // Roll back the auth user so the email isn't permanently taken
     await sb.auth.admin.deleteUser(userId).catch(() => {})
 
     const errMsg = profileErr.message || ''
     if (errMsg.includes('TENANT_FULL')) {
-      // H3 trigger fired — race with another concurrent registration
       return jsonResponse(403, {
         error: 'Registration just filled the last slot — please contact your manager.',
       })
