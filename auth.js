@@ -53,26 +53,7 @@ const APP_CONFIG = {
 // P3.1 — Per-tenant brand marks. Map tenant slug → inline SVG. The dialkaro
 //  default ships a custom phone+chat mark instead of the ☎️ emoji. Other
 //  tenants keep their per-tenant emoji unless their slug is added here.
-var BRAND_MARKS = {
-  dialkaro: '<svg class="brand-svg" viewBox="0 0 64 64" aria-hidden="true">'
-    + '<defs>'
-    +   '<linearGradient id="dkg" x1="0" y1="0" x2="1" y2="1">'
-    +     '<stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#b91c1c"/>'
-    +   '</linearGradient>'
-    + '</defs>'
-    // Rounded backdrop — red
-    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#dkg)"/>'
-    // Subtle inner bevel
-    + '<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1"/>'
-    // Phone handset — centered, filled white, tilted
-    + '<g transform="translate(32,32) rotate(-135) translate(-12,-12)">'
-    +   '<path d="M5.8 2.4C6.4 1 7.8 0 9.4 0h2.8c1.2 0 2.2 1 2.2 2.2v3.4c0 1.2-1 2.2-2.2 2.2h-1L11 9c.8 2 2 3.8 3.4 5.2 1.4 1.4 3.2 2.6 5.2 3.4l1.2-.2h.2c1.2 0 2.2 1 2.2 2.2v3.4c0 1.2-1 2.2-2.2 2.2h-.6c-1.6 0-3-.6-4.2-1.4C12 20.6 3.4 12 .4 7.8-.4 6.6 0 5 .8 3.8z" fill="#fff"/>'
-    + '</g>'
-    // Signal arcs — top-right, radiating from earpiece
-    + '<path d="M39 17a8 8 0 0 1 2.2 5.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
-    + '<path d="M43 13a13 13 0 0 1 3.5 9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/>'
-    + '</svg>'
-};
+var BRAND_MARKS = {};
 
 // Render either a brand SVG mark or the per-tenant emoji into a target element.
 function _renderBrandMark(el, slug, emoji) {
